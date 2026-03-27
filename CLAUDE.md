@@ -4,7 +4,16 @@
 
 実験データ解析フレームワーク。解析者の暗黙的な依存（データの意味、パラメータの経緯、処理の前提条件）を明示的に外部化し、再現性と追跡性を構造的に保証する。
 
-要求定義: <https://www.notion.so/sakamotosan/454b41d3c5a24b53a7169e3e41df1bc9>
+設計ドキュメント: `docs/` 配下
+
+- [docs/requirements.md](docs/requirements.md) — 要求定義（設計原則 + 要求I〜VI）
+- [docs/architecture.md](docs/architecture.md) — アーキテクチャ（概要・スコープ・概念モデル・設計方針・要求マッピング）
+- [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
+- [docs/components/datastore.md](docs/components/datastore.md) — DataStore（識別軸定義・クエリAPI・バリデーション）
+- [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・run_meta・dtype）
+- [docs/components/pipeline-gen.md](docs/components/pipeline-gen.md) — パイプライン生成（dvc.yaml導出・バリデーション）
+- [docs/components/external-data.md](docs/components/external-data.md) — 外部データ（DAG間合成・dvc import）
+- [docs/toolstack.md](docs/toolstack.md) — ツールスタック
 
 ## アーキテクチャ
 
