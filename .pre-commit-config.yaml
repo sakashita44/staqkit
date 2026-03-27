@@ -1,0 +1,43 @@
+# pre-commit フック設定
+# 使い方: uv run pre-commit install
+repos:
+    # コードフォーマッター (Prettier)
+    - repo: https://github.com/pre-commit/mirrors-prettier
+      rev: v4.0.0-alpha.8
+      hooks:
+          - id: prettier
+            types_or: [markdown, json, yaml, toml]
+            additional_dependencies:
+                ["prettier@3.4.2", "prettier-plugin-toml@2.0.1"]
+            args:
+                [
+                    --write,
+                    --config=.config/.prettierrc,
+                    --ignore-path=.config/.prettierignore,
+                ]
+
+    # Pythonコードフォーマッター・リンター (Ruff)
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.9.4
+      hooks:
+          - id: ruff
+            args: [--fix, --config=.config/ruff.toml]
+          - id: ruff-format
+            args: [--config=.config/ruff.toml]
+
+    # Markdownリント
+    - repo: https://github.com/DavidAnson/markdownlint-cli2
+      rev: v0.17.2
+      hooks:
+          - id: markdownlint-cli2
+            args: [--config, .config/.markdownlint.jsonc]
+
+    # 末尾空白・ファイル末尾改行の修正
+    - repo: https://github.com/pre-commit/pre-commit-hooks
+      rev: v5.0.0
+      hooks:
+          - id: trailing-whitespace
+            args: [--markdown-linebreak-ext=md]
+          - id: end-of-file-fixer
+          - id: mixed-line-ending
+            args: [--fix=lf]

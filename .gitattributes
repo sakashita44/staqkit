@@ -1,0 +1,28 @@
+# 改行コード設定
+# リポジトリ内は LF で統一（クロスプラットフォーム対応）
+
+# デフォルト: テキストファイルは LF で正規化
+* text=auto eol=lf
+
+# バイナリファイル（改行変換しない）
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+
+# データファイル（DVC管理対象になりうる）
+*.parquet binary
+*.arrow binary
+*.feather binary
+
+# Windows 固有スクリプト（CRLF が必要）
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell（LF でも動作するが、Windows 環境を考慮して CRLF）
+*.ps1 text eol=crlf
