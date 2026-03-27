@@ -11,30 +11,9 @@ A structured-analysis framework designed for reproducible research data manageme
 - **スキーマに基づくデータ構造の維持**: データ属性とテーブルスキーマの宣言的定義により、規約に沿ったデータ構造を促す
 - **再現性を志向するパイプライン管理**: データバージョン管理との連携と実行記録の保持により、解析状態の再現を支援する
 
-## セットアップ
+## ドキュメント
 
-```bash
-# 依存インストール
-uv sync
-
-# pre-commitフックの有効化
-uv run pre-commit install
-
-# テスト実行
-uv run pytest
-```
-
-## 技術スタック
-
-| カテゴリ                 | ツール                     |
-| ------------------------ | -------------------------- |
-| クエリエンジン           | DuckDB                     |
-| DataFrame                | Polars                     |
-| 型定義・バリデーション   | Pydantic, Pandera, pyright |
-| DAG構造                  | networkx                   |
-| パイプライン・データ管理 | DVC                        |
-| 設定ファイル             | ruamel.yaml                |
-| CLI                      | Typer                      |
+設計・開発に関するドキュメントは [docs/](docs/) を参照。
 
 ## ライセンス
 
