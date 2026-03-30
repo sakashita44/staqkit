@@ -15,7 +15,7 @@ outs:
     timeseries:
         path: timeseries.parquet
         add_datastore: true
-    dtype:
+    dtype: # データ種別キー(dkey)の属性定義テーブル
         path: dtype.parquet
         add_datastore: true
     summary_figure:
@@ -49,7 +49,7 @@ extra_deps:
 
 ### outs 統一スキーマ
 
-全出力を `outs` セクションに統一する。各エントリは `path`（出力先）と `add_datastore`（DataStore VIEW への統合有無）を持つ。
+全出力を `outs` セクションに統一する。各エントリは `path`（出力先）と `add_datastore`（DataStore の VIEW（クエリエンジン上の仮想テーブル）への統合有無）を持つ。
 
 ```yaml
 outs:

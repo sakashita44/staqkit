@@ -1,10 +1,10 @@
 # DataStore
 
-データアクセスの唯一のエントリポイント。全ステージのファイルをインメモリクエリエンジン上にVIEWとして結合し、SQLまたは高レベルAPIでクエリする。クエリエンジンはProtocolとして定義されており、現在の実装はDuckDB（`:memory:` モード）。
+データアクセスの唯一のエントリポイント。全ステージのファイルをインメモリクエリエンジン上に VIEW（実データを参照する仮想テーブル）として結合し、SQLまたは高レベルAPIでクエリする。クエリエンジンはProtocolとして定義されており、現在の実装はDuckDB（`:memory:` モード）。
 
 ## axes.yaml: 識別軸定義
 
-`config/axes.yaml` でデータの識別軸構造をプロジェクトごとに定義する。フレームワークコードはこの定義を読み込んで動的に動作し、`uid` や `dkey` といった文字列をハードコードしない。
+`config/axes.yaml` でデータの識別軸構造をプロジェクトごとに定義する。フレームワークコードはこの定義を読み込んで動的に動作し、`uid`（レコード一意識別子）や `dkey`（データ種別キー）といった文字列をハードコードしない。
 
 ```yaml
 # config/axes.yaml
@@ -27,7 +27,7 @@ data_descriptor:
         - body_side
         - unit
         - quantity_type
-    meta_table: dtype
+    meta_table: dtype # dkey の属性定義を格納するテーブル名
 ```
 
 フレームワークは `config.axes["record"].key → "uid"` のように参照する。
@@ -56,7 +56,8 @@ class DataStore:
 
     def scoped(self, up_to: list[str]) -> "DataStore":
         """スコープ付き読み取り専用ビューインスタンスを返す。
-        指定ステージの上流閉包に含まれる dtype のみを VIEW 化する。"""
+        指定ステージからDAGを遡って到達可能な全ステージ（上流閉包）の
+        出力のみを VIEW 化する。"""
         ...
 
     @classmethod
