@@ -4,12 +4,15 @@ dvc.yaml は `stages/*/stage.yaml` 群から動的に生成される派生物で
 
 ## CLIラッパー
 
+パイプライン関連の主要コマンド。全コマンドの詳細は [CLI リファレンス](cli.md) を参照。
+
 ```bash
 sard repro [stage]       # 1. Generate → 2. Validate(最小限) → 3. dvc repro
 sard status              # 1. Generate → 2. dvc status
 sard dag                 # stage.yaml から直接生成（dvc.yaml 不要）
 sard validate            # フルチェック（参照・スキーマ・config 整合性）
 sard clean               # 孤児・inactive データ検出（--remove で削除）
+sard catalog             # テーブルカタログ出力（→ stdout）
 ```
 
 ## 導出マッピング

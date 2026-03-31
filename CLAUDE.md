@@ -12,8 +12,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [docs/architecture.md](docs/architecture.md) — アーキテクチャ（概要・スコープ・概念モデル・設計方針・要求マッピング）
 - [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
 - [docs/components/datastore.md](docs/components/datastore.md) — DataStore（識別軸定義・クエリAPI・バリデーション）
-- [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・run_meta・dtype）
+- [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・実行モデル・run_meta）
 - [docs/components/pipeline-gen.md](docs/components/pipeline-gen.md) — パイプライン生成（dvc.yaml導出・バリデーション）
+- [docs/components/cli.md](docs/components/cli.md) — CLI リファレンス（全コマンド一覧）
 - [docs/components/external-data.md](docs/components/external-data.md) — 外部データ（DAG間合成・dvc import）
 - [docs/toolstack.md](docs/toolstack.md) — ツールスタック
 
@@ -22,7 +23,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 2層構成。依存方向は **Framework → Core** の一方向のみ（Core は Framework を import しない）。
 
 - **Core Library**（`sard.core`）: ドメイン非依存の部品群。axes.yaml 等のプロジェクト固有語彙を知らない。QueryEngine, SchemaValidator, Provenance, DAGBuilder
-- **Framework**（`sard.framework`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageContext, Discovery, Generator
+- **Framework**（`sard.framework`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, Discovery, Generator
 - **CLI**（`sard.cli`）: CLI エントリポイント。Framework を呼び出す薄いレイヤー
 
 ## 設計原則

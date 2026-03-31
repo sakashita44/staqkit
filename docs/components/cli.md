@@ -1,0 +1,103 @@
+# CLI リファレンス
+
+全コマンドは `sard` プレフィックスで統一する。各コマンドは Framework 層を呼び出す薄いラッパーである。
+
+## パイプライン操作
+
+### sard repro
+
+```bash
+sard repro [stage]
+```
+
+stage.yaml 群から dvc.yaml を動的生成 → 最小限バリデーション → `dvc repro` を実行する。stage を指定すると対象ステージとその上流のみ再実行する。
+
+### sard status
+
+```bash
+sard status
+```
+
+stage.yaml 群から dvc.yaml を動的生成 → `dvc status` を実行し、各ステージの鮮度を表示する。
+
+### sard dag
+
+```bash
+sard dag
+```
+
+stage.yaml から直接 DAG を生成して可視化する。dvc.yaml の生成を経由しないため、planned ステージも含めた全体構造を表示可能。
+
+## バリデーション
+
+### sard validate
+
+```bash
+sard validate
+```
+
+横断的なフルチェックを実行する。
+
+- 参照整合性（source_stage の実在確認・循環検出）
+- スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）
+- config 整合性（axes 定義 vs 既存データ）
+
+## データ管理
+
+### sard clean
+
+```bash
+sard clean              # 孤児・inactive データを検出して一覧表示
+sard clean --remove     # 確認の上、実際に削除
+```
+
+検出対象:
+
+- `data/stages/xxx/` が存在するが対応する `stage.yaml` がない（孤児）
+- `data/stages/xxx/` が存在し、status が inactive（休止中データ）
+
+### sard catalog
+
+```bash
+sard catalog                          # config で catalog: true な全テーブル → stdout
+sard catalog --table dtype timeseries # 指定テーブルのみ → stdout
+sard catalog --up-to B Y             # スコープ付き（B, Y の上流閉包のみ）→ stdout
+sard catalog --table dtype --up-to B  # テーブル指定 + スコープ → stdout
+```
+
+`config/table_schemas/` で `catalog: true` に設定されたテーブルの内容を一覧出力する。`--table` で明示指定した場合はそちらが優先される。
+
+出力は常に stdout。ファイルへの保存はパイプで行う。
+
+```bash
+# Git 管理用カタログの生成例
+sard catalog > docs/dtype_catalog.md
+```
+
+`--up-to` は [DataStore.scoped()](datastore.md#db組み立て) と同じ原理で、指定ステージの上流閉包（DAG を遡って到達可能な全ステージ）に出力を限定する。特定ステージの依存範囲だけを確認したい場合に使う。
+
+### sard import
+
+```bash
+sard import --repo <url> --stages <list>
+```
+
+外部リポジトリからデータをインポートする。詳細は [外部データ](external-data.md) を参照。
+
+## プロヴェナンス
+
+### sard history
+
+```bash
+sard history <stage>
+```
+
+指定ステージの過去の run_meta 一覧を表示する。内部的には `git log` をラップする。
+
+### sard provenance
+
+```bash
+sard provenance <stage>
+```
+
+指定ステージのプロヴェナンスチェーン（deps_runs を再帰的に辿った実行系譜）を表示する。
