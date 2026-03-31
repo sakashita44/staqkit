@@ -22,9 +22,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 2層構成。依存方向は **Framework → Core** の一方向のみ（Core は Framework を import しない）。
 
-- **Core Library**（`sard.core`）: ドメイン非依存の部品群。axes.yaml 等のプロジェクト固有語彙を知らない。QueryEngine, SchemaValidator, Provenance, DAGBuilder
-- **Framework**（`sard.framework`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, Discovery, Generator
-- **CLI**（`sard.cli`）: CLI エントリポイント。Framework を呼び出す薄いレイヤー
+- **Core Library**（`staqkit.core`）: ドメイン非依存の部品群。axes.yaml 等のプロジェクト固有語彙を知らない。QueryEngine, SchemaValidator, Provenance, DAGBuilder
+- **Framework**（`staqkit.framework`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, Discovery, Generator
+- **CLI**（`staqkit.cli`）: CLI エントリポイント。Framework を呼び出す薄いレイヤー
 
 ## 設計原則
 

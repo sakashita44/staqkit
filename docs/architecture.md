@@ -4,10 +4,10 @@
 
 ## 概要
 
-sard は2層構成を採る。下層の **Core Library** はドメイン非依存の汎用部品群であり、上層の **Framework** がプロジェクト固有の規約を解釈して Core を組み立てる。
+staqkit は2層構成を採る。下層の **Core Library** はドメイン非依存の汎用部品群であり、上層の **Framework** がプロジェクト固有の規約を解釈して Core を組み立てる。
 
 ```text
-src/sard/
+src/staqkit/
 ├── types.py        ← 公開API型（StageInfo, DataStore 等の re-export）
 ├── core/           ← ドメイン非依存（識別軸定義等の語彙を知らない）
 │   ├── models.py
@@ -25,8 +25,8 @@ src/sard/
     └── main.py
 ```
 
-- `sard.types`: run.py 等の利用者向け公開 API。`from sard.types import StageInfo, DataStore` が正規インポートパス。framework 内部のモジュールパスを利用者に露出しない
-- `sard.run_stage`: トップレベルで re-export。`from sard import run_stage`
+- `staqkit.types`: run.py 等の利用者向け公開 API。`from staqkit.types import StageInfo, DataStore` が正規インポートパス。framework 内部のモジュールパスを利用者に露出しない
+- `staqkit.run_stage`: トップレベルで re-export。`from staqkit import run_stage`
 
 ### 層の責務
 
@@ -150,10 +150,10 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | 実行メタ（run_meta）     | stages/xxx/run_meta.yaml                  | Git管理。run_id・deps_runs・パラメータスナップショット・ハッシュ |
 | 外部依存（extra_deps）   | stages/xxx/stage.yaml                     | extra_deps セクション                                            |
 | 処理コード               | stages/xxx/run.py                         | エントリポイント                                                 |
-| テーブルカタログ         | `sard catalog` の stdout 出力             | 対象テーブルは table_schemas の `catalog: true` で指定           |
+| テーブルカタログ         | `staqkit catalog` の stdout 出力             | 対象テーブルは table_schemas の `catalog: true` で指定           |
 
 ## 未解決事項
 
 - 横断パラメータの扱い: 複数ステージで同じ値を参照するケースに対する設計仕様上の解決策
-- `sard remote` コマンド群の具体設計
+- `staqkit remote` コマンド群の具体設計
 - `DataStore.from_external()` の具体設計

@@ -44,7 +44,7 @@ data/                        ← DVC管理（成果物側）
     normalize/
       timeseries.parquet
       ...
-  external/                  ← 外部sardリポジトリからのimportデータ
+  external/                  ← 外部staqkitリポジトリからのimportデータ
     <source>/
       <stage>/
         ...
