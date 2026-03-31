@@ -1,7 +1,7 @@
 [project]
-name = "sard"
+name = "staqkit"
 version = "0.1.0"
-description = "A structured-analysis framework designed for reproducible research data management"
+description = "staqkit — Structured Tabular Access and Query Kit for reproducible research data management"
 readme = "README.md"
 license = "MIT"
 authors = [

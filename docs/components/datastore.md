@@ -151,7 +151,7 @@ catalog: true
 
 - `ddl`: SQL DDL（CREATE TABLE 文）。DuckDB にそのまま渡してスキーマ定義・制約検証に使用。NOT NULL, PRIMARY KEY, UNIQUE, CHECK, FOREIGN KEY 等の制約を表現力の上限なく記述可能
 - `description`: テーブルの説明（カタログ出力に使用）
-- `catalog`: `sard catalog` の出力対象とするか（デフォルト: false）。CLI で `--table` を明示指定した場合はそちらが優先
+- `catalog`: `staqkit catalog` の出力対象とするか（デフォルト: false）。CLI で `--table` を明示指定した場合はそちらが優先
 - 書き込みラッパーが出力前にスキーマとの整合性を検証するため、UNION ALL 互換性チェックに到達する前に捕捉可能
 - 「ステージXがテーブルYにカラムZを提供する」という明示的な宣言は存在しない。stage.yaml の outs セクション（`add_datastore: true` のエントリ）が暗黙的に担う
 
