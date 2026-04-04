@@ -56,6 +56,10 @@ uv run pyright               # 型チェック
 - `.config/.markdownlint.jsonc` — markdownlint
 - `pyproject.toml [tool.pyright]` — pyright（standard モード）
 
+## Pull Request
+
+PR作成時は `.github/PULL_REQUEST_TEMPLATE.md` のテンプレートに従う。
+
 ## pre-commit フック
 
 コミット時に以下が自動実行される:
