@@ -103,7 +103,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 
 独自実装に明示的な理由がない限り既存ライブラリを優先する。
 
-- **DataFrame スキーマ検証**: DDL パース（sqlglot）+ QueryEngine による検証クエリ。DDL が制約定義の SSoT であり、CHECK 式に DuckDB 固有関数を許容するため、同一エンジンで検査する方式を採る。Pandera は DDL SSoT との二重管理になるため不採用
+- **DataFrame スキーマ検証**: DDL パース（sqlglot）+ QueryEngine による検証クエリ。DDL が制約定義の SSoT であり、CHECK 式に DuckDB 固有関数を許容するため、同一エンジンで検査する
 - **YAML 設定バリデーション**: Pydantic（stage.yaml, axes.yaml, table_schemas/\*.yaml の外形検証）
 - **データクラスバリデーション**: Pydantic dataclasses（StageDefinition, RunMeta 等）
 - **DAG 構築・循環検出**: networkx
@@ -137,7 +137,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | III-2 拡張性                | ステージ追加 = ディレクトリ追加                                                                    |
 | III-3 意味到達性            | description 3層構造                                                                                |
 | IV-1 スナップショット分岐   | Git ブランチ + DVC                                                                                 |
-| IV-2 DAG間合成              | dvc import + DataStore.from_external()                                                             |
+| IV-2 DAG間合成              | dvc import + Framework 層ファクトリ関数による外部データ用 DataStore 生成                           |
 | V-1 プロセス切り出し        | ステージ単位のモジュラリティ                                                                       |
 | V-2 解析と出力の分離        | ステージ設計による分離                                                                             |
 

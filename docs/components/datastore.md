@@ -113,8 +113,8 @@ df = store.fetch("""
 """)
 ```
 
-- SELECT（CTE、VALUES 含む）のみ許可。INSERT/UPDATE/DELETE/DDL は拒否
-- 読み取り専用の保証は QueryEngine 側の責務。DuckDB 実装では `read_only=True` の接続オプションでエンジンレベルで保証し、SQL パースによる判定は行わない
+- SELECT（CTE、VALUES 含む）のみ許可。INSERT/UPDATE/DELETE/DDL は拒否。この制約は QueryEngine Protocol の責務（`fetch` の契約）
+- DuckDB 実装では `read_only=True` の接続オプションでエンジンレベルで保証する。SQL パースによる判定は行わない
 - 接続オブジェクトは外部に公開しない（エンジン固有 API への依存を防止）
 
 ### 戻り値型
@@ -144,7 +144,7 @@ def run(stage: StageInfo, store: DataStore):
 - テーブル名のみ指定。出力先パスは DataStore がコンストラクタで受け取った `output_paths` から内部解決
 - スキーマバリデーション + ファイル書き込みを一体で行う（バリデーション忘れ防止）
 - `output_paths` が `None`（読み取り専用インスタンス）の場合はエラー
-- **書き込んだデータはその DataStore インスタンスからは読めない**（QueryEngine 内の VIEW を変更しない。DataStore は実行中 immutable）
+- **書き込んだデータはその DataStore インスタンスからは読めない**（QueryEngine 内の VIEW を変更しない。DataStore は実行中 immutable）。run.py 内では書き込み前の DataFrame を直接保持しているため、再読み込みの必要はない
 
 ### 出力パスの SSoT
 
