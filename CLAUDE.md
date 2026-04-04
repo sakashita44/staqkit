@@ -22,14 +22,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 2層構成。依存方向は **Framework → Core** の一方向のみ（Core は Framework を import しない）。
 
-- **Core Library**（`staqkit.core`）: ドメイン非依存の部品群。axes.yaml 等のプロジェクト固有語彙を知らない。QueryEngine, SchemaValidator, Provenance, DAGBuilder
+- **Core Library**（`staqkit.core`）: ドメイン非依存の部品群。プロジェクト固有語彙を知らない。QueryEngine, TableSchemaSet, SchemaValidator, Provenance, DAGBuilder
 - **Framework**（`staqkit.framework`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, Discovery, Generator
 - **CLI**（`staqkit.cli`）: CLI エントリポイント。Framework を呼び出す薄いレイヤー
 
 ## 設計原則
 
 - **暗黙依存の外部化**: データの意味・経緯・前提をメタデータとして明示化
-- **構造的保証**: 識別軸とスキーマの宣言的定義 → 定義に準拠しないデータは管理下に存在不可
+- **構造的保証**: DDL（table_schemas）によるスキーマ宣言 → 定義に準拠しないデータは管理下に存在不可
 - **不変性と純粋関数性**: 処理ステップは `f(入力データ, パラメータ) → 新データ`
 - **データ依存DAG**: 全データ間関係は有向非巡回グラフ
 

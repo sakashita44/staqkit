@@ -10,7 +10,7 @@ dvc.yaml は `stages/*/stage.yaml` 群から動的に生成される派生物で
 staqkit repro [stage]       # 1. Generate → 2. Validate(最小限) → 3. dvc repro
 staqkit status              # 1. Generate → 2. dvc status
 staqkit dag                 # stage.yaml から直接生成（dvc.yaml 不要）
-staqkit validate            # フルチェック（参照・スキーマ・config 整合性）
+staqkit validate            # フルチェック（参照整合性 + スキーマ検証全般）
 staqkit clean               # 孤児・inactive データ検出（--remove で削除）
 staqkit catalog             # テーブルカタログ出力（→ stdout）
 ```
@@ -38,7 +38,8 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 | -------------------------------------------------- | ---------------- | --------------- |
 | 参照整合性（source_stage 実在・循環検出）          | YES              | YES             |
 | スキーマ整合性（parquet vs config/table_schemas/） | YES              | ---             |
-| config 整合性（axes 定義 vs 既存データ）           | YES              | ---             |
+| TableSchemaSet 整合性（FK 参照先・型一致）         | YES              | ---             |
+| column_descriptions 未記述                         | YES（警告）      | ---             |
 
 ## 生成例
 

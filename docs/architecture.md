@@ -11,6 +11,7 @@ src/staqkit/
 ├── types.py        ← 公開API型（StageInfo, DataStore 等の re-export）
 ├── core/           ← ドメイン非依存（識別軸定義等の語彙を知らない）
 │   ├── models.py
+│   ├── table_schema_set.py
 │   ├── query_engine.py
 │   ├── schema_validator.py
 │   ├── provenance.py
@@ -35,7 +36,7 @@ src/staqkit/
 | Core Library（QueryEngine等） | なし                     | `register(name, files)` / `fetch(sql)` / `close()`               |
 | Framework（DataStore）        | あり（設定ファイル経由） | `query(table, filters)` / `fetch(sql)` / `write_table(name, df)` |
 
-Core Library はテーブル名とファイルパスのリストだけを受け取る。識別軸の語彙（`subject_id`, `dkey` 等）を一切知らない。Framework 層がプロジェクト設定（`config/axes.yaml`）を読み込み、Core Library を組み立てるファサードとして機能する。
+Core Library はテーブル名とファイルパスのリストだけを受け取る。識別軸の語彙（`subject_id`, `dkey` 等）を一切知らない。Framework 層がプロジェクト設定（`config/table_schemas/`）を読み込み、Core Library を組み立てるファサードとして機能する。
 
 ドメインスキーマ非依存で動く経路（`fetch()` による直接 SQL）を常に提供し、高レベル API を使わない選択肢を公式にサポートする。
 
@@ -47,7 +48,7 @@ QueryEngine は Protocol として定義し、DuckDB実装はその1つの実装
 
 ### ドメイン依存の局所化
 
-要求I-2（多軸スライス）はフレームワークがドメインの識別軸構造を知ることを要求するが、ドメイン知識への依存は汎用性を損なう。この問題に対し、ドメイン依存をFramework層に局所化し、Core層をドメイン非依存に保つ。設定の最小構成は識別軸定義2行（レコードキー名 + データ種別キー名）で動作する状態を保証する。
+要求I-2（多軸スライス）はフレームワークがドメインの識別軸構造を知ることを要求するが、ドメイン知識への依存は汎用性を損なう。この問題に対し、ドメイン依存をFramework層に局所化し、Core層をドメイン非依存に保つ。識別軸の構造は DDL の PK/FK 制約から導出し、フレームワークがドメイン固有の語彙を予約語として持たない設計とする。
 
 ### 管理境界
 
@@ -58,7 +59,7 @@ QueryEngine は Protocol として定義し、DuckDB実装はその1つの実装
 | 区分               | 内容                                                                                                                                                                                                                                                    |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | フレームワーク固定 | [outs 統一スキーマ](components/stage.md#outs-統一スキーマ)（path + add_datastore）、[分散テーブル統合](components/stage.md#分散テーブルの統合)（UNION ALL + DDL 制約検証）、stage の概念、DuckDB over files クエリエンジン、DataStore クラスの query IF |
-| プロジェクト設定   | record_key 階層、識別軸属性、[テーブルスキーマ定義](components/datastore.md#テーブル結合のスキーマ契約)（config/table_schemas/）、stage 名、ファイル配置規約                                                                                            |
+| プロジェクト設定   | [テーブルスキーマ定義](components/datastore.md#テーブル結合のスキーマ契約)（config/table_schemas/、PK/FK で識別軸の階層構造を表現）、stage 名、ファイル配置規約 |
 
 ### 不変性の保証
 
@@ -104,7 +105,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 独自実装に明示的な理由がない限り既存ライブラリを優先する。
 
 - **DataFrame スキーマ検証**: DDL パース（sqlglot）+ QueryEngine による検証クエリ。DDL が制約定義の SSoT であり、CHECK 式に DuckDB 固有関数を許容するため、同一エンジンで検査する
-- **YAML 設定バリデーション**: Pydantic（stage.yaml, axes.yaml, table_schemas/\*.yaml の外形検証）
+- **YAML 設定バリデーション**: Pydantic（stage.yaml, table_schemas/\*.yaml の外形検証）
 - **データクラスバリデーション**: Pydantic dataclasses（StageDefinition, RunMeta 等）
 - **DAG 構築・循環検出**: networkx
 
@@ -113,7 +114,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | 設計原則           | 実現手段                                                        |
 | ------------------ | --------------------------------------------------------------- |
 | 暗黙依存の外部化   | stage.yaml によるパラメータ・入力の明示化、管理境界の明確な設定 |
-| 構造的保証         | 状態の一方向導出、axes.yaml によるスキーマ宣言                  |
+| 構造的保証         | 状態の一方向導出、DDL（table_schemas）によるスキーマ宣言       |
 | データ中心         | DataStore による意味的属性アクセス                              |
 | 不変性と純粋関数性 | 状態の一方向導出、検出+エラー+復元による保証                    |
 | データ依存DAG      | DVC deps/outs、networkx による構築・検証                        |
