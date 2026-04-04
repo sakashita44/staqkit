@@ -2124,49 +2124,6 @@ wheels = [
 ]
 
 [[package]]
-name = "sard"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "duckdb" },
-    { name = "dvc" },
-    { name = "networkx" },
-    { name = "pandera" },
-    { name = "polars" },
-    { name = "pydantic" },
-    { name = "ruamel-yaml" },
-    { name = "typer" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
-    { name = "pytest-cov" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "duckdb", specifier = ">=1.5.1" },
-    { name = "dvc", specifier = ">=3.67.0" },
-    { name = "networkx", specifier = ">=3.6.1" },
-    { name = "pandera", specifier = ">=0.30.1" },
-    { name = "polars", specifier = ">=1.39.3" },
-    { name = "pydantic", specifier = ">=2.12.5" },
-    { name = "ruamel-yaml", specifier = ">=0.19.1" },
-    { name = "typer", specifier = ">=0.24.1" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pre-commit", specifier = ">=4.5.1" },
-    { name = "pyright", specifier = ">=1.1.408" },
-    { name = "pytest", specifier = ">=9.0.2" },
-    { name = "pytest-cov", specifier = ">=7.1.0" },
-]
-
-[[package]]
 name = "scmrepo"
 version = "3.6.1"
 source = { registry = "https://pypi.org/simple" }
@@ -2262,6 +2219,49 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/8a/e6/f3832264bcd98b9e71c93c579ab6b39eb1db659cab305e59f8f7c1adc777/sqltrie-0.11.2.tar.gz", hash = "sha256:4df47089b3abfe347bcf81044e633b8c7737ebda4ce1fec8b636a85954ac36da", size = 23551, upload-time = "2025-02-19T15:11:35.474Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0a/a7/96dd20ed6c4008ca57aa14bd89588eff1dfc163f45067cf715df290dc211/sqltrie-0.11.2-py3-none-any.whl", hash = "sha256:4afb1390bbe8a6900a53709b76213a436fbaf352de0b99ba9b0d395d4a0ca6b6", size = 17140, upload-time = "2025-02-19T15:11:34.044Z" },
+]
+
+[[package]]
+name = "staqkit"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "duckdb" },
+    { name = "dvc" },
+    { name = "networkx" },
+    { name = "pandera" },
+    { name = "polars" },
+    { name = "pydantic" },
+    { name = "ruamel-yaml" },
+    { name = "typer" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pre-commit" },
+    { name = "pyright" },
+    { name = "pytest" },
+    { name = "pytest-cov" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "duckdb", specifier = ">=1.5.1" },
+    { name = "dvc", specifier = ">=3.67.0" },
+    { name = "networkx", specifier = ">=3.6.1" },
+    { name = "pandera", specifier = ">=0.30.1" },
+    { name = "polars", specifier = ">=1.39.3" },
+    { name = "pydantic", specifier = ">=2.12.5" },
+    { name = "ruamel-yaml", specifier = ">=0.19.1" },
+    { name = "typer", specifier = ">=0.24.1" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pre-commit", specifier = ">=4.5.1" },
+    { name = "pyright", specifier = ">=1.1.408" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "pytest-cov", specifier = ">=7.1.0" },
 ]
 
 [[package]]
