@@ -7,9 +7,8 @@
 ```text
 config/                      ← Git管理（プロジェクト設定）
   project.yaml
-  axes.yaml                  ← 識別軸定義
-  table_schemas/
-    timeseries.yaml          ← テーブルごとのカラム定義
+  table_schemas/             ← テーブルごとのスキーマ定義（サブディレクトリ許容）
+    timeseries.yaml
     record.yaml
     dtype.yaml
 
@@ -57,6 +56,15 @@ data/                        ← DVC管理（成果物側）
 - **dvc.yamlの位置づけ**: `stages/*/stage.yaml` 群から動的生成される派生物。stage.yaml がSSoT
 
 ## ネストディレクトリ
+
+### table_schemas
+
+`config/table_schemas/` はサブディレクトリによる整理を許容する。走査は `config/table_schemas/**/*.yaml` の再帰。
+
+- テーブル名 = ファイル名（ステム）。ディレクトリパスは名前に含めない（DDL の `CREATE TABLE <name>` と一致させるため）
+- 同名ファイルが異なるサブディレクトリに存在 → エラー（一意性違反）
+
+### stages
 
 ステージ数が増えた場合の一覧性確保のため、ディレクトリのネストを許容する。
 

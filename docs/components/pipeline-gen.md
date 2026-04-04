@@ -38,7 +38,8 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 | -------------------------------------------------- | ---------------- | --------------- |
 | 参照整合性（source_stage 実在・循環検出）          | YES              | YES             |
 | スキーマ整合性（parquet vs config/table_schemas/） | YES              | ---             |
-| config 整合性（axes 定義 vs 既存データ）           | YES              | ---             |
+| TableSchemaSet 整合性（FK 参照先・型一致）         | YES              | ---             |
+| column_descriptions 未記述                         | YES（警告）      | ---             |
 
 ## 生成例
 

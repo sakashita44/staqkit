@@ -40,7 +40,8 @@ staqkit validate
 
 - 参照整合性（source_stage の実在確認・循環検出）
 - スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）
-- config 整合性（axes 定義 vs 既存データ）
+- TableSchemaSet 整合性（FK 参照先の存在・型一致）
+- column_descriptions 未記述の警告
 
 ## データ管理
 
@@ -75,6 +76,23 @@ staqkit catalog > docs/dtype_catalog.md
 ```
 
 `--up-to` は [DataStore.scoped()](datastore.md#db組み立て) と同じ原理で、指定ステージの上流閉包（DAG を遡って到達可能な全ステージ）に出力を限定する。特定ステージの依存範囲だけを確認したい場合に使う。
+
+### staqkit column
+
+```bash
+staqkit column <column_name>
+```
+
+指定カラム名の全テーブルでの出現箇所を横断検索する。`config/table_schemas/` の DDL と `column_descriptions` を集約して表示する。
+
+```bash
+staqkit column uid
+# → record.uid [PK]: "試行一意識別子（subject_id × trial_id で決定）"
+# → timeseries.uid [FK → record(uid)]: （参照先の description を表示）
+# → ...全テーブルでの出現箇所
+```
+
+カラムの役割（PK/FK/通常）、description、FK 参照先を表示する。データの置き場所（table_schema）と見せ方（CLI）の分離により、発見性・引き継ぎ性を実現する。
 
 ### staqkit import
 
