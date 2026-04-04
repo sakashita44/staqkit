@@ -28,9 +28,6 @@ params:
 
 inputs:
     - source_stage: compute_cog_velocity
-      query_args:
-          data_group: cog
-          quantity_type: velocity
 
 extra_deps:
     raw_data: data/raw/motion
@@ -44,7 +41,7 @@ extra_deps:
 | status     | ステージの状態（active / planned / inactive） | planned は data/ 側未生成。inactive は下流に伝搬            |
 | outs       | 全出力宣言（path + add_datastore フラグ）     | dvc.yaml の outs: に展開。上流の outs は下流の deps: に展開 |
 | params     | 処理の振る舞い制御値                          | dvc.yaml の params: で追跡                                  |
-| inputs     | 上流データの利用範囲                          | dvc.yaml の params: で追跡（概念的にはparamsと独立）        |
+| inputs     | 依存先ステージの宣言                          | dvc.yaml の params: + deps: で追跡                          |
 | extra_deps | DAG外の外部ファイル/ディレクトリ依存          | dvc.yaml の deps: に展開                                    |
 
 ### outs 統一スキーマ
@@ -69,20 +66,62 @@ outs:
 - `add_datastore: true` かつディレクトリ（末尾 `/`）→ エラー
 - key とファイル名ステムの不一致 → warning
 
-### params と inputs の概念的区別
+### params と inputs の関心の分離
+
+| 依存の種類                                   | 宣言場所          | DVC 追跡経路        |
+| -------------------------------------------- | ----------------- | ------------------- |
+| どのステージに依存するか（DAG 構造）         | stage.yaml inputs | params + deps       |
+| パラメトリックな制御値                       | stage.yaml params | params              |
+| どのデータをどう取得するか（クエリロジック） | run.py            | deps（run.py 変更） |
 
 - **params**: 上流ノードの知識なしに記述可能な処理制御値。変更 → 再計算
-- **inputs**: 上流ノードの属性構造に依存する参照情報。変更 → 依存の意味が変わる
+- **inputs**: 依存先ステージ名（`source_stage`）のみ宣言。DAG の辺の宣言 + DVC params 追跡の2つの役割を持つ
+- クエリ条件は run.py 内で開発者が直接記述する。フィルタ条件をパラメータとして変更可能にしたい場合は params に書き、run.py 内で `stage.params` 経由で使用する
 
-DVC の params 追跡機構を共有しつつ、概念的区別は stage.yaml 内のセクション分離で表現する。
+### inputs の形式
 
-### inputs: query_args 方式
+```yaml
+inputs:
+    - source_stage: D
+    - source_stage: X
+```
 
-`query_args` は DataStore.query() のキーワード引数と構造的に対応する。処理関数で `store.query(**spec['query_args'])` と書けば、stage.yaml と実装が構造的に一致する。
+```python
+def run(stage: StageInfo, store: DataStore):
+    cog = store.query("timeseries", {"dkey": stage.params["target_dkeys"]})
+    force = store.query("timeseries", {"dkey": ["force_x", "force_y"]})
+    dtypes = store.query("dtypes")
+    result = process(cog, force, dtypes, **stage.params)
+    store.write_table("result", result)
+```
 
-- 既存の query API の引数仕様をそのままYAMLに書く。新たなDSL設計が不要
-- query API の進化に inputs が自動追従する
-- DVC params 追跡: `query_args.data_group` 単位で変更検知可能
+inputs の役割:
+
+| 役割            | 仕組み                                         |
+| --------------- | ---------------------------------------------- |
+| DAG の辺の宣言  | source_stage → pipeline-gen が deps を自動導出 |
+| DVC params 追跡 | source_stage の追加・削除で再実行トリガー      |
+
+### DataStore スコープと status の関係
+
+| status  | inputs                | DataStore スコープ                     | dvc.yaml |
+| ------- | --------------------- | -------------------------------------- | -------- |
+| planned | 未記述                | 全データ（末端相当）                   | 含めない |
+| planned | source_stage 記述済み | 絞らない（DAG 可視化のみに使用）       | 含めない |
+| active  | 記述済み              | 宣言した source_stage 群の全上流に限定 | 含む     |
+| active  | 未記述                | 空（DataStore へのアクセス時にエラー） | 含む     |
+
+- active かつ inputs 未記述の場合、DataStore にデータが登録されないため、クエリ実行時にエラー。inputs 不要でクエリも行わないステージ（外部データの取り込み等）は正常に実行される
+- planned + inputs 未記述 → DAG 上で浮いた位置に表示
+- planned + source_stage 記述済み → その先に点線で表示（スコープは絞らない）
+
+### source_stage 指定漏れの既知の限界
+
+source_stage の指定漏れは「データの不在」ではなく「データの不足」を引き起こす。スコープ内のデータだけでクエリが成功し、エラーなく処理が完了するが、本来必要なデータが静かに欠落した不完全な結果が出力される可能性がある。
+
+これは「何が必要か」が解析者の頭の中にしかない問題であり、inputs の形式をどう変えても解決しない種類の問題として受容する。ステージを適切な粒度で設計すること、DAG 図で依存経路の欠落を視覚的に確認すること、run.py で明示的にクエリを書いて結果を確認することが軽減策となる。
+
+将来的に `staqkit lint` 等で「run.py 内の query 呼び出しで参照するテーブル名」と「inputs の source_stage が提供するテーブル名」の突合チェックを提供できれば、静的に検出可能なケースは拾える。
 
 ### extra_deps: DAG外の外部依存
 
@@ -200,9 +239,6 @@ params:
     cog_vel_thresholds: [100, 70, 50, 30, 0]
 inputs:
     - source_stage: compute_cog_velocity
-      query_args:
-          data_group: cog
-          quantity_type: velocity
 
 # 実行結果サマリ
 row_counts:
@@ -288,9 +324,9 @@ from staqkit import run_stage
 from staqkit.types import StageInfo, DataStore
 
 def run(stage: StageInfo, store: DataStore):
-    df = store.query(subject_id=[1, 2], stage="import")
+    df = store.query("timeseries", {"subject_id": [1, 2]})
     result = normalize(df, **stage.params)
-    store.write_table("timeseries", result, stage=stage)
+    store.write_table("timeseries", result)
 
 if __name__ == "__main__":
     run_stage(run)

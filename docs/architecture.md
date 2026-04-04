@@ -30,14 +30,14 @@ src/staqkit/
 
 ### 層の責務
 
-| 層                            | ドメインスキーマへの依存 | 提供するAPI                                                                            |
-| ----------------------------- | ------------------------ | -------------------------------------------------------------------------------------- |
-| Core Library（QueryEngine等） | なし                     | `register_table(name, files, schema)` / `query(table, **filters)` / `raw_connection()` |
-| Framework（DataStore）        | あり（設定ファイル経由） | `query(subject_id=1, stage="normalized")`                                              |
+| 層                            | ドメインスキーマへの依存 | 提供する API                                                     |
+| ----------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| Core Library（QueryEngine等） | なし                     | `register(name, files)` / `fetch(sql)` / `close()`               |
+| Framework（DataStore）        | あり（設定ファイル経由） | `query(table, filters)` / `fetch(sql)` / `write_table(name, df)` |
 
-Core Library はテーブル名とカラム名のリストだけを受け取る。識別軸の語彙（`subject_id`, `dkey` 等）を一切知らない。Framework 層がプロジェクト設定（`config/axes.yaml`）を読み込み、Core Library を組み立てるファサードとして機能する。
+Core Library はテーブル名とファイルパスのリストだけを受け取る。識別軸の語彙（`subject_id`, `dkey` 等）を一切知らない。Framework 層がプロジェクト設定（`config/axes.yaml`）を読み込み、Core Library を組み立てるファサードとして機能する。
 
-ドメインスキーマ非依存で動く経路（`raw_connection()` による直接SQL）を常に提供し、高レベルAPIを使わない選択肢を公式にサポートする。
+ドメインスキーマ非依存で動く経路（`fetch()` による直接 SQL）を常に提供し、高レベル API を使わない選択肢を公式にサポートする。
 
 ### DI境界
 
@@ -101,7 +101,12 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 
 ### バリデーション
 
-独自実装に明示的な理由がない限り既存ライブラリを優先する。DataFrameスキーマ検証はPandera、YAML設定バリデーションはPydantic、DAG構築・循環検出はnetworkxを使用する。
+独自実装に明示的な理由がない限り既存ライブラリを優先する。
+
+- **DataFrame スキーマ検証**: DDL パース（sqlglot）+ QueryEngine による検証クエリ。DDL が制約定義の SSoT であり、CHECK 式に DuckDB 固有関数を許容するため、同一エンジンで検査する
+- **YAML 設定バリデーション**: Pydantic（stage.yaml, axes.yaml, table_schemas/\*.yaml の外形検証）
+- **データクラスバリデーション**: Pydantic dataclasses（StageDefinition, RunMeta 等）
+- **DAG 構築・循環検出**: networkx
 
 ## 設計原則マッピング
 
@@ -118,7 +123,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | 要求                        | 実現手段                                                                                           |
 | --------------------------- | -------------------------------------------------------------------------------------------------- |
 | I-1 単一AP                  | DataStore クラスが唯一のアクセスポイント                                                           |
-| I-2 多軸スライス            | DataStore.query() + DuckDB SQL                                                                     |
+| I-2 多軸スライス            | DataStore.query() + DataStore.fetch()                                                              |
 | I-3 一意参照                | 識別軸属性の組み合わせで一意特定                                                                   |
 | I-4 DAG紐づき一覧性         | DAGマップ生成ツール（stage.yaml から生成）                                                         |
 | I-5 異質データ共存          | format ディスパッチ（Parquet/CSV/pickle/npy）                                                      |
@@ -132,7 +137,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | III-2 拡張性                | ステージ追加 = ディレクトリ追加                                                                    |
 | III-3 意味到達性            | description 3層構造                                                                                |
 | IV-1 スナップショット分岐   | Git ブランチ + DVC                                                                                 |
-| IV-2 DAG間合成              | dvc import + DataStore.from_external()                                                             |
+| IV-2 DAG間合成              | dvc import + Framework 層ファクトリ関数による外部データ用 DataStore 生成                           |
 | V-1 プロセス切り出し        | ステージ単位のモジュラリティ                                                                       |
 | V-2 解析と出力の分離        | ステージ設計による分離                                                                             |
 
@@ -142,7 +147,7 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | ------------------------ | ----------------------------------------- | ---------------------------------------------------------------- |
 | DAG構造                  | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                      |
 | パラメータ               | stages/xxx/stage.yaml                     | params セクション                                                |
-| inputs（データ利用範囲） | stages/xxx/stage.yaml                     | inputs セクション（query_args 形式）                             |
+| inputs（依存先ステージ） | stages/xxx/stage.yaml                     | inputs セクション（source_stage のみ）                           |
 | description（1行）       | stages/xxx/stage.yaml                     | desc フィールド                                                  |
 | description（詳細）      | stages/xxx/README.md                      | アルゴリズム説明                                                 |
 | planned 状態             | stages/xxx/stage.yaml                     | status フィールド + data/ の有無                                 |
@@ -150,10 +155,10 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 | 実行メタ（run_meta）     | stages/xxx/run_meta.yaml                  | Git管理。run_id・deps_runs・パラメータスナップショット・ハッシュ |
 | 外部依存（extra_deps）   | stages/xxx/stage.yaml                     | extra_deps セクション                                            |
 | 処理コード               | stages/xxx/run.py                         | エントリポイント                                                 |
-| テーブルカタログ         | `staqkit catalog` の stdout 出力             | 対象テーブルは table_schemas の `catalog: true` で指定           |
+| テーブルカタログ         | `staqkit catalog` の stdout 出力          | 対象テーブルは table_schemas の `catalog: true` で指定           |
 
 ## 未解決事項
 
 - 横断パラメータの扱い: 複数ステージで同じ値を参照するケースに対する設計仕様上の解決策
 - `staqkit remote` コマンド群の具体設計
-- `DataStore.from_external()` の具体設計
+- 外部データ用ファクトリ関数の具体設計

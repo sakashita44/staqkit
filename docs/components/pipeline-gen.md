@@ -59,7 +59,6 @@ params:
     method: z_score
 inputs:
     - source_stage: import
-      query_args: { data_group: joint }
 ```
 
 生成される dvc.yaml:
