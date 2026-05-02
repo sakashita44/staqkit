@@ -37,6 +37,24 @@
 
 ---
 
+## 外部 import 時のスキーマ・FK 伝達
+
+- **論点**: `dvc import` で外部リポジトリの parquet を取り込んだ際、対応する `config/table_schemas/` をどう取得するか
+- **スコープ**: A6（親プロジェクトデータ参照立ち上げ）, C2（別リポジトリのデータ取り込み）, [components/external-data.md](components/external-data.md)
+- **背景**:
+    - `dvc import` で `data/external/<source>/<stage>/` にミラーされるのは parquet 実体のみ
+    - 取り込んだデータを staqkit Library（DataStore）から読むにはスキーマ定義（カラム型・PK/FK）が必要
+    - external-data.md には「Framework 層のファクトリ関数で外部データ用 DataStore を独立インスタンスとして生成」とあるが、その DataStore がスキーマをどこから取得するかは未整理
+    - FK が外部由来テーブルを参照する場合、参照先テーブルが取り込まれていないと解決できない
+- **選択肢**:
+    - **A. 親 repo を別途 clone して schema 参照**: 現状の暗黙前提に近い。子 repo は schema 情報を持たず、必要時に親 clone を見る
+    - **B. `staqkit import` 時に table_schemas も同梱コピー**: 該当ステージが利用する table_schemas を `data/external/<source>/config/` 等に同梱。子 repo 単体で完結
+    - **C. 子 repo 側で必要部分の table_schemas を手動再定義**: 子 repo が独自の schema を持つ。柔軟だが二重定義のリスク
+    - **D. 上記の併用**: 例えば自動同梱（B）+ 必要なら手動上書き（C）
+- **関連**: [components/external-data.md](components/external-data.md), [usecases.md](usecases.md)（C2 補足, A6 補足）
+
+---
+
 ## 運用ルール
 
 - 論点が解消したら該当セクションを削除し、解決内容を正規ドキュメントに反映する
