@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 設計ドキュメント: `docs/` 配下
 
-- [docs/requirements.md](docs/requirements.md) — 要求定義（設計原則 + 要求I〜VI）
+- [docs/requirements.md](docs/requirements.md) — 要求定義（設計ファースト + 信頼・理解・独立の三柱）
 - [docs/usecases.md](docs/usecases.md) — ユースケース・シナリオ体系（CLI/Library/Git+DVC/Pattern の振り分け、未仕様ポイント一覧）
 - [docs/idea.md](docs/idea.md) — 横断的観点・設計論点の雑記帳（決定事項ではない作業中メモ）
 - [docs/architecture.md](docs/architecture.md) — アーキテクチャ（概要・スコープ・概念モデル・設計方針・要求マッピング）
