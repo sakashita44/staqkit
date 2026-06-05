@@ -272,6 +272,17 @@ output_hashes:
 - **dvc.lock**: 「各ファイルの現在期待されるハッシュは何か」 — 宣言的（現在の期待状態）
 - **run_meta**: 「このステージはいつ・何で・どう実行されたか」 — 事実的（実行時の記録）
 
+### データ実体との独立性
+
+run_meta は実行事実の記録であり、データ実体への依存を持たない。データ実体が消えていても（DVC キャッシュクリーンアップ、DVC remote アクセス不可、過去 commit の参照等）、git に残った run_meta から「いつ・何のパラメータで・どの上流実行から生成されたか」を完全に追跡できる。
+
+dvc.lock がデータ実体への参照（ファイルハッシュ）であるのに対し、run_meta は実行事実の独立記録として機能する。両者は補完関係にあり、
+
+- データ実体の整合性確認 → dvc.lock
+- 来歴・パラメータ・行数の追跡 → run_meta
+
+外部から `staqkit import` で取り込んだデータについても、出典元リポジトリを clone すれば run_meta が取得でき、DVC remote へのアクセスなしに git のみで来歴文書として参照可能。
+
 ### プロヴェナンスチェーン
 
 `deps_runs` により実行系譜を再帰的に辿れる。上流の run_meta.yaml を読むのはDAGの順方向であり、循環は生じない。
@@ -317,7 +328,7 @@ StageInfo は status によって挙動を変えない。planned/active の区�
 
 ### run.py エントリポイント規約
 
-DVC は `python stages/X/run.py` で各ステージを呼び出す。`run_stage` は StageInfo と DataStore を構築して処理関数に注入する。
+DVC は `python stages/X/run.py` で各ステージを呼び出す。`run_stage` は自身のディレクトリから stage.yaml を読み、StageInfo を構築し、スコープ解決ファクトリ（`open_store`）で DataStore を組み立てて処理関数に注入する。run.py が制御を `run_stage` に渡す制御反転（IoC）の形を採る。
 
 ```python
 from staqkit import run_stage
@@ -331,6 +342,8 @@ def run(stage: StageInfo, store: DataStore):
 if __name__ == "__main__":
     run_stage(run)
 ```
+
+`store.query` が契約検証つきの祝福されたメイン経路、`store.fetch` が生 SQL の抜け道である（保証の差は [datastore.md](datastore.md#読み取り-api)）。
 
 ### post-run 検証
 

@@ -16,15 +16,15 @@ data/external/<source>/<stage>/   ← 上流の data/stages/<stage>/ をミラ�
 
 - `staqkit import --repo <url> --stages <list>` でステージ単位の一括取得
 - `dvc update data/external/` で一括更新
-- Framework 層のファクトリ関数で外部データ用 DataStore を独立インスタンスとして生成・アクセス
+- Project 層のスコープ解決ファクトリで外部データ用 DataStore を独立インスタンスとして生成・アクセス
 
 ## 上流の公開IF
 
-フレームワークの標準構造（`stages/*`, `config/`, `data/stages/*`）自体が外部IFとして機能する。上流リポジトリに `exports.yaml` 等の追加設定を要求しない。
+staqkit の標準構造（`stages/*`, `config/`, `data/stages/*`）自体が外部IFとして機能する。上流リポジトリに `exports.yaml` 等の追加設定を要求しない。
 
 ## 上流DAG理解
 
-上流リポジトリの詳細な来歴は、上流リポジトリを別途clone/参照して辿る。フレームワークの責務外。
+上流リポジトリの詳細な来歴は、上流リポジトリを別途clone/参照して辿る。staqkit の責務外。
 
 ## リモートアクセスツール（TODO）
 
