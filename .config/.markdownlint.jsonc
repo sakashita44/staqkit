@@ -25,6 +25,7 @@
     "siblings_only": true
   },
   // MD029: 順序付きリスト - すべて "1." を使用 ※Prettier互換
+  // (ソースを全 "1." にすれば Prettier も全 "1." を維持する)
   "MD029": {
     "style": "one"
   },
