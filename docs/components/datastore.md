@@ -246,7 +246,7 @@ def schema(self, table: str) -> TableSchema:
 
 DataStore は同名テーブルを全ステージ分 UNION ALL して1つの VIEW にする。全ステージが同一のカラム定義を持つことが要求されるため、`config/table_schemas/` をコンシューマ側の契約として維持し、プロデューサー側の契約は書き込み時バリデーションで実現する。
 
-スキーマ定義は SQL DDL をそのまま記述する。YAML で DDL のサブセットを再発明するのではなく、DuckDB にそのまま渡せる標準 SQL を正統な形式とする。カタログ等のフレームワーク固有メタデータは YAML フィールドとして併記する。
+スキーマ定義は SQL DDL をそのまま記述する。YAML で DDL のサブセットを再発明するのではなく、DuckDB にそのまま渡せる標準 SQL を正統な形式とする。カタログ等の staqkit 固有メタデータは YAML フィールドとして併記する。
 
 ```yaml
 # config/table_schemas/timeseries.yaml
