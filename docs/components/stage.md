@@ -328,7 +328,7 @@ StageInfo は status によって挙動を変えない。planned/active の区�
 
 ### run.py エントリポイント規約
 
-DVC は `python stages/X/run.py` で各ステージを呼び出す。`run_stage` は StageInfo と DataStore を構築して処理関数に注入する。
+DVC は `python stages/X/run.py` で各ステージを呼び出す。`run_stage` は自身のディレクトリから stage.yaml を読み、StageInfo を構築し、スコープ解決ファクトリ（`open_store`）で DataStore を組み立てて処理関数に注入する。run.py が制御を `run_stage` に渡す制御反転（IoC）の形を採る。
 
 ```python
 from staqkit import run_stage
@@ -342,6 +342,8 @@ def run(stage: StageInfo, store: DataStore):
 if __name__ == "__main__":
     run_stage(run)
 ```
+
+`store.query` が契約検証つきの祝福されたメイン経路、`store.fetch` が生 SQL の抜け道である（保証の差は [datastore.md](datastore.md#読み取り-api)）。
 
 ### post-run 検証
 

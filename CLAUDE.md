@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-実験データ解析フレームワーク。解析者の暗黙的な依存（データの意味、パラメータの経緯、処理の前提条件）を明示的に外部化し、再現性と追跡性を構造的に保証する。
+実験データ解析のための道具。規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムの二面を持つ。解析者の暗黙的な依存（データの意味、パラメータの経緯、処理の前提条件）を明示的に外部化し、再現性と追跡性を構造的に保証する。
 
 設計ドキュメント: `docs/` 配下
 
 - [docs/requirements.md](docs/requirements.md) — 要求定義（設計ファースト + 信頼・理解・独立の三柱）
 - [docs/usecases.md](docs/usecases.md) — ユースケース・シナリオ体系（CLI/Library/Git+DVC/Pattern の振り分け、未仕様ポイント一覧）
 - [docs/idea.md](docs/idea.md) — 横断的観点・設計論点の雑記帳（決定事項ではない作業中メモ）
-- [docs/architecture.md](docs/architecture.md) — アーキテクチャ（概要・スコープ・概念モデル・設計方針・要求マッピング）
+- [docs/architecture.md](docs/architecture.md) — アーキテクチャ（正体・層構造・設計方針・差し替え性・要求マッピング）
+- [docs/distribution.md](docs/distribution.md) — 位置づけと配布（正体・パッケージ配布・Copier 雛形伝播）
 - [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
 - [docs/components/datastore.md](docs/components/datastore.md) — DataStore（識別軸定義・クエリAPI・バリデーション）
 - [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・実行モデル・run_meta）
@@ -22,11 +23,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## アーキテクチャ
 
-2層構成。依存方向は **Framework → Core** の一方向のみ（Core は Framework を import しない）。
+2層構成。依存方向は **Project → Core** の一方向のみ（Core は Project を import しない）。
 
-- **Core Library**（`staqkit.core`）: ドメイン非依存の部品群。プロジェクト固有語彙を知らない。QueryEngine, TableSchemaSet, SchemaValidator, Provenance, DAGBuilder
-- **Framework**（`staqkit.framework`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, Discovery, Generator
-- **CLI**（`staqkit.cli`）: CLI エントリポイント。Framework を呼び出す薄いレイヤー
+- **Core 層**（`staqkit.core`）: ドメイン非依存の部品群。プロジェクト固有語彙を知らない。QueryEngine, TableSchemaSet, SchemaValidator, Provenance, DAGBuilder
+- **Project 層**（`staqkit.project`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, スコープ解決ファクトリ（build_scoped_engine / open_store）, Discovery, Generator
+- **CLI**（`staqkit.cli`）: CLI エントリポイント。Project 層を呼び出す薄いレイヤー。データ参照コマンドはスコープ解決ファクトリ経由で DataStore ファサードに依存しない
 
 ## 設計原則
 

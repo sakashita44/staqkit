@@ -1,6 +1,6 @@
 # CLI リファレンス
 
-全コマンドは `staqkit` プレフィックスで統一する。各コマンドは Framework 層を呼び出す薄いラッパーである。
+全コマンドは `staqkit` プレフィックスで統一する。各コマンドは Project 層を呼び出す薄いラッパーである。データを参照するコマンド（catalog / validate）は、Project 層のスコープ解決ファクトリ（`build_scoped_engine`）と Core 層の SchemaValidator を用い、run.py / notebook 向けの DataStore ファサードには依存しない（[architecture.md](../architecture.md#スコープ解決ファクトリと依存方向)）。
 
 ## パイプライン操作
 
@@ -75,7 +75,7 @@ staqkit catalog --table dtype --up-to B  # テーブル指定 + スコープ →
 staqkit catalog > docs/dtype_catalog.md
 ```
 
-`--up-to` は Framework 層の[スコープ解決](datastore.md#db組み立て)と同じ原理で、指定ステージの上流閉包（DAG を遡って到達可能な全ステージ）に出力を限定する。特定ステージの依存範囲だけを確認したい場合に使う。
+`--up-to` は Project 層の[スコープ解決](datastore.md#スコープ解決ファクトリ)と同じ原理で、指定ステージの上流閉包（DAG を遡って到達可能な全ステージ）に出力を限定する。特定ステージの依存範囲だけを確認したい場合に使う。
 
 ### staqkit column
 

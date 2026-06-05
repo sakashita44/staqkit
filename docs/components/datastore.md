@@ -1,8 +1,8 @@
 # DataStore
 
-データアクセスの唯一のエントリポイント。スコープ解決済みの Parquet ファイル群をクエリエンジン上に VIEW として結合し、SQL または高レベル API でクエリする。クエリエンジンは Protocol として定義されており、現在の実装は DuckDB（`:memory:` モード）。
+run.py / notebook 向けの、データアクセスの**祝福されたメイン経路**。スコープ解決済みの Parquet ファイル群をクエリエンジン上に VIEW として結合し、契約検証つきの高レベル API（`query`）または生 SQL の抜け道（`fetch`）でクエリする。クエリエンジンは Protocol として定義されており、現在の実装は DuckDB（`:memory:` モード）。
 
-DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走査しない。組み立て（ファイル収集・スコープ絞り込み・インスタンス生成）は Framework 層の責務であり、DataStore は解決済みデータのみを受け取る。
+DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走査しない。組み立て（ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層の**スコープ解決ファクトリ**の責務であり、DataStore は解決済みのクエリエンジンを受け取る。同じファクトリを CLI のデータ参照コマンド（catalog / validate）も用いるため、CLI は DataStore ファサードに依存しない（[architecture.md](../architecture.md#スコープ解決ファクトリと依存方向)）。
 
 ## TableSchemaSet
 
@@ -92,7 +92,7 @@ class DataStore:
     ): ...
 ```
 
-- `tables`: Framework 層がスコープ解決した結果。DataStore はこれを QueryEngine に登録する
+- `tables`: Project 層のスコープ解決ファクトリが解決した結果。DataStore はこれを QueryEngine に登録する
 - `schemas`: `config/table_schemas/` のパース・検証済みスナップショット。DDL の PK/FK 制約からテーブル間関係を導出する
 - `output_paths`: `None` なら `write_table` は利用不可（CLI 等の読み取り専用用途）
 - DataStore 自体を context manager として提供（`with DataStore(...) as store:`）
@@ -112,18 +112,23 @@ DataStore のライフサイクル = QueryEngine 接続のライフサイクル�
 - 定義あり・データあり → 通常ステージ
 - dvc.yaml のパースに依存しない（DVC 内部構造への密結合を回避）
 
-## DB 組み立て
+## スコープ解決ファクトリ
 
-各ステージの `stage.yaml` の outs セクションを読み、`add_datastore: true` のエントリを同名ファイル（ステム一致）同士で UNION ALL して VIEW 化する。この組み立てロジックは Framework 層に配置される（Discovery の延長、またはファクトリ関数として提供）。
+各ステージの `stage.yaml` の outs セクションを読み、`add_datastore: true` のエントリを同名ファイル（ステム一致）同士で UNION ALL して VIEW 化する。このロジックは Project 層の**スコープ解決ファクトリ**に集約し、二段で提供する。
 
-DataStore に渡す前にスコープ解決が完了している:
+- `build_scoped_engine(scope) -> QueryEngine`: スコープ済み・read-only・VIEW 登録済みの QueryEngine を返す低レベルファクトリ
+- `open_store(scope, *, writable) -> DataStore`: run.py 向けの高レベル入口。内部で `build_scoped_engine` を用い、QueryEngine と TableSchemaSet をラップした DataStore を返す
 
-- run.py 実行時: `run_stage` が inputs の `source_stage` から上流閉包を算出し、該当ステージの出力のみを `tables` に渡す
-- CLI `--up-to`: Framework 側が DAG を辿って `tables` を絞り込んでから DataStore に渡す
+DataStore と CLI は同じファクトリを共有する。
+
+- run.py 実行時: `run_stage` が inputs の `source_stage` から上流閉包を算出し、`open_store` で書き込み可能な DataStore を得る
+- CLI catalog / validate: `build_scoped_engine` が返す QueryEngine を直接使う（DataStore ファサードを経由しない）。`--up-to` のスコープも DAG を辿って同ファクトリに渡す
 
 ## 読み取り API
 
-### 高レベル API（query）
+読み取りには保証の異なる二経路がある（[architecture.md](../architecture.md#守る契約とアクセス経路の保証グラデーション)）。`query()` は契約検証つきの祝福されたメイン経路、`fetch()` は無保証の抜け道である。抜け道に降りても、スコープ安全（登録済み VIEW しか参照できない）と read-only は維持される。
+
+### 高レベル API（query・祝福されたメイン経路）
 
 ```python
 def query(self, table: str, filters: dict[str, Any] | None = None) -> pl.DataFrame:
@@ -140,7 +145,7 @@ df = store.query("timeseries", {"subject_id": [1, 2], "dkey": ["A", "B"]})
 - 範囲条件・JOIN・集計が必要な場合は `fetch()` で SQL を書く
 - query() の役割: DDL 情報（TableSchemaSet）を使ったランタイムバリデーション（テーブル名・キー名・型の検証）+ dict → SQL 変換
 
-### 低レベル API（fetch）
+### 低レベル API（fetch・無保証の抜け道）
 
 ```python
 def fetch(self, sql: str) -> pl.DataFrame:
@@ -159,7 +164,8 @@ df = store.fetch("""
 
 - SELECT（CTE、VALUES 含む）のみ許可。INSERT/UPDATE/DELETE/DDL は拒否。この制約は QueryEngine Protocol の責務（`fetch` の契約）
 - DuckDB 実装では `read_only=True` の接続オプションでエンジンレベルで保証する。SQL パースによる判定は行わない
-- 接続オブジェクトは外部に公開しない（エンジン固有 API への依存を防止）
+- `fetch` は無保証の抜け道だが、登録済み VIEW しか参照できないためスコープ安全は崩れない。`query()` の契約検証（テーブル名・キー名・型）だけが失われる
+- 接続オブジェクトは staqkit 実装内では公開しない。フルカタログへ繋がれてスコープ安全が崩れること、および保守者のエンジン差し替え性が損なわれることを避けるため。最深の抜け道は `fetch` までとする
 
 ### 戻り値型
 
@@ -168,7 +174,7 @@ df = store.fetch("""
 - DuckDB とゼロコピー連携可能
 - イミュータブルで staqkit の不変性原則と整合
 - pandas が必要な場面では `.to_pandas()` で変換可能
-- QueryEngine Protocol の差し替え可能性を維持するため、エンジン固有の型は返さない
+- 戻り値型は `polars.DataFrame` を契約として固定する。エンジン固有の型を返さないことで、保守者が将来エンジンや戻り値ライブラリを置換する際のコスト（migration surface）を継ぎ目に局所化する
 
 ## 書き込み
 
@@ -234,7 +240,7 @@ def schema(self, table: str) -> TableSchema:
 ```
 
 - `columns()` は型情報なし。主用途はクエリ組み立て時のカラム名確認。型の不一致は `write_table()` のバリデーションが検出する
-- `schema()` は DDL パース結果の全情報を返す。Framework 内部や将来の拡張用途に対応
+- `schema()` は DDL パース結果の全情報を返す。Project 層内部や将来の拡張用途に対応
 
 ## テーブル結合のスキーマ契約
 
@@ -261,7 +267,7 @@ column_descriptions:
     value: "測定値。意味と単位は dkey に従属"
 ```
 
-- `ddl`: SQL DDL（CREATE TABLE 文）。DDL はエンジン依存（現在は DuckDB）。CHECK 式にエンジン固有関数が含まれ得ることは既知の制約。エンジン差し替え時には DDL のマイグレーションが必要
+- `ddl`: SQL DDL（CREATE TABLE 文）。DuckDB にそのまま渡せる標準 SQL を正統な形式とし、YAML で DDL のサブセットを再発明しない。DDL は DuckDB 依存であり CHECK 式にエンジン固有関数を含みうる。これはエンジン差し替え時に触れる migration surface（[architecture.md](../architecture.md#migration-surface)）であり、置換時には DDL のマイグレーションを伴う
 - `description`: テーブルの説明（カタログ出力に使用）
 - `catalog`: `staqkit catalog` の出力対象とするか（デフォルト: false）。CLI で `--table` を明示指定した場合はそちらが優先
 - `column_descriptions`: カラム名 → 説明文字列のマップ。単位は説明内に記述する（例: `"体重 [kg]"`）。FK カラムの description は省略可（参照先の description で意味が明確なため）
@@ -323,7 +329,7 @@ DDL に記載のカラムに対応する `column_descriptions` がない場合�
 
 - DDL のパース・制約検証（DataStore 側）
 - メタデータ管理（テーブル一覧・カラム情報）（DataStore 側）
-- ファイルパスの解決・走査（Framework 層）
+- ファイルパスの解決・走査（Project 層）
 - データの正確性保証（register は渡されたものをそのまま登録するだけ）
 
 ### Protocol メソッド
@@ -353,17 +359,9 @@ class QueryEngine(Protocol):
 
 Protocol は VIEW ベースを前提とする。TABLE 対応は将来のパフォーマンス要件に応じて検討する。
 
-## DataStore の組み立て
+## 外部データアクセス
 
-DataStore の組み立て（stage.yaml 走査 → ファイル収集 → スコープ絞り込み → インスタンス生成）は Framework 層の責務。
-
-- Core 層の DataStore は解決済みデータのみ受け取る
-- 組み立てロジックは Framework 層に配置（Discovery の延長、またはファクトリ関数）
-- CLI の `--up-to` も Framework 側が DAG を辿って `tables` を絞り込んでから DataStore に渡す
-
-### 外部データアクセス
-
-外部リポジトリからインポートしたデータ用の DataStore は、Framework 層のファクトリ関数として提供する。DataStore 自体は「データが外部由来かどうか」を知る必要がない。ファクトリが外部ディレクトリを走査して `tables` / `schemas` を組み立て、通常のコンストラクタに渡す。
+外部リポジトリからインポートしたデータも、Project 層のスコープ解決ファクトリ（[#スコープ解決ファクトリ](#スコープ解決ファクトリ)）経由でアクセスする。DataStore 自体は「データが外部由来かどうか」を知る必要がない。ファクトリが外部ディレクトリ（`data/external/<source>/<stage>/`）を走査して `tables` / `schemas` を組み立て、通常のコンストラクタに渡す。
 
 ### 非 Parquet データの発見
 

@@ -16,7 +16,7 @@ data/external/<source>/<stage>/   ← 上流の data/stages/<stage>/ をミラ�
 
 - `staqkit import --repo <url> --stages <list>` でステージ単位の一括取得
 - `dvc update data/external/` で一括更新
-- Framework 層のファクトリ関数で外部データ用 DataStore を独立インスタンスとして生成・アクセス
+- Project 層のスコープ解決ファクトリで外部データ用 DataStore を独立インスタンスとして生成・アクセス
 
 ## 上流の公開IF
 

@@ -44,7 +44,7 @@
 - **背景**:
     - `dvc import` で `data/external/<source>/<stage>/` にミラーされるのは parquet 実体のみ
     - 取り込んだデータを staqkit Library（DataStore）から読むにはスキーマ定義（カラム型・PK/FK）が必要
-    - external-data.md には「Framework 層のファクトリ関数で外部データ用 DataStore を独立インスタンスとして生成」とあるが、その DataStore がスキーマをどこから取得するかは未整理
+    - external-data.md には「Project 層のスコープ解決ファクトリで外部データ用 DataStore を独立インスタンスとして生成」とあるが、その DataStore がスキーマをどこから取得するかは未整理
     - FK が外部由来テーブルを参照する場合、参照先テーブルが取り込まれていないと解決できない
 - **選択肢**:
     - **A. 親 repo を別途 clone して schema 参照**: 現状の暗黙前提に近い。子 repo は schema 情報を持たず、必要時に親 clone を見る
