@@ -148,6 +148,8 @@ with open_scoped_store(Path("."), up_to=["normalize"]) as store:
 
 `StageInfo` は [ProjectLayout](../architecture.md#projectlayout) を委譲先に持つため、`open_store` は `stage` から layout を辿れる。読み取りスコープが inputs、書き込み対象が outs、という対応が `StageInfo` 一点に集約され、両者を別経路で渡す曖昧さを排除する。
 
+`schemas` を `stage` に内包させず別引数で受けるのは、TableSchemaSet がスコープ非依存のプロジェクト全体スナップショットであり、`load_schema_set` でコマンド実行ごとに一度だけ構築して全成果物（QueryEngine 直利用の CLI 経路と DataStore 経路の双方）で共有する単位だからである。ステージごとに変わる `stage` と、コマンド全体で不変の `schemas` はライフサイクルが異なるため、引数として分離する。
+
 ### コマンド別に必要な構成要素
 
 組み立ての各成果物は、コマンドの目的に応じて必要なものだけを構築する。
@@ -188,7 +190,7 @@ cols = store.query("timeseries", {"subject_id": [1]}, columns=["uid", "frame", "
 - `columns`: 取得列を限定する射影。`None` なら全列。指定した列名は TableSchemaSet で実在を検証する
 - 範囲条件・JOIN・集計が必要な場合は `fetch()` で SQL を書く
 - query() の役割: DDL 情報（TableSchemaSet）を使ったランタイムバリデーション（テーブル名・キー名・列名・型の検証）と dict から SQL への変換
-- 結果は対象テーブルの主キー昇順で返す。複数ファイルを UNION ALL した VIEW は行順序が不定であり、query() は決定的な順序を保証して再現性を担保する。順序保証のコストを避けたい大規模ケースでは `fetch()` で明示的に順序を指定する
+- 結果は対象テーブルの主キー昇順で返す。複合主キーの場合は DDL の宣言順に列を連ねた昇順とする。複数ファイルを UNION ALL した VIEW は行順序が不定であり、query() は決定的な順序を保証して再現性を担保する。順序保証のコストを避けたい大規模ケースでは `fetch()` で明示的に順序を指定する
 
 ### 低レベル API（fetch・無保証の抜け道）
 
