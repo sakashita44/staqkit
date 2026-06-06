@@ -28,6 +28,16 @@ staqkit dag
 
 stage.yaml から直接 DAG を生成して可視化する。dvc.yaml の生成を経由しないため、planned ステージも含めた全体構造を表示可能。
 
+## ステージ管理
+
+### staqkit add-stage
+
+```bash
+staqkit add-stage <path> [--status <active|planned|inactive>]
+```
+
+新しいステージのディレクトリ（`stages/<path>/`）に stage.yaml と run.py のボイラープレートを生成する。`--status` で初期状態を指定する（既定: planned）。プロジェクト全体の初期化は Copier が担い、本コマンドは既存プロジェクト内へのステージ追加に専念する（[distribution.md](../distribution.md#初期化とステージ追加の責務分担)）。コマンドの詳細仕様（add 系の拡張要否・登録ステージ用テンプレート等）は [#7](https://github.com/sakashita44/staqkit/issues/7) で策定中。
+
 ## バリデーション
 
 ### staqkit validate
