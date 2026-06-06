@@ -74,6 +74,7 @@ stages:
             - data/stages/import/dtype.parquet
             - data/stages/import/record.parquet
             - config/table_schemas/timeseries.yaml
+            - config/table_schemas/dtype.yaml
         params:
             - stages/normalize/stage.yaml:
                   - params

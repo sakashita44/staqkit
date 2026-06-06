@@ -22,6 +22,7 @@ src/staqkit/
 │   ├── datastore.py
 │   ├── stage_info.py
 │   ├── run_stage.py
+│   ├── layout.py          ← ProjectLayout（パス規約の SSoT）
 │   ├── store_factory.py   ← スコープ解決ファクトリ（build_scoped_engine / open_store）
 │   ├── generator.py
 │   └── discovery.py
@@ -35,23 +36,36 @@ src/staqkit/
 
 ### 層の責務
 
-| 層                       | ドメインスキーマへの依存 | 提供する API                                                     |
-| ------------------------ | ------------------------ | ---------------------------------------------------------------- |
-| Core 層（QueryEngine等） | なし                     | `register(name, files)` / `fetch(sql)` / `close()`               |
-| Project 層（DataStore）  | あり（設定ファイル経由） | `query(table, filters)` / `fetch(sql)` / `write_table(name, df)` |
+| 層                       | ドメインスキーマへの依存 | 提供する API                                                                                     |
+| ------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------ |
+| Core 層（QueryEngine等） | なし                     | EngineBuilder: `register(name, files)` / `seal()`、QueryEngine: `fetch(sql, params)` / `close()` |
+| Project 層（DataStore）  | あり（設定ファイル経由） | `query(table, filters, columns)` / `fetch(sql, params)` / `write_table(name, df)`                |
 
 Core 層はテーブル名とファイルパスのリストだけを受け取る。識別軸の語彙（`subject_id`, `dkey` 等）を一切知らない。Project 層がプロジェクト設定（`config/table_schemas/`）を読み込み、Core 層を組み立てる。
 
 ### スコープ解決ファクトリと依存方向
 
-スコープ解決（stage.yaml 走査・ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層の **スコープ解決ファクトリ**に集約する。これは DataStore と CLI が共有する土台であり、二段で提供する。
+スコープ解決（stage.yaml 走査・ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層の **スコープ解決ファクトリ**に集約する。これは DataStore と CLI が共有する土台であり、クラスではなく関数群として、組み立てフローの各ステップを独立した単位で提供する（具体仕様は [datastore.md](components/datastore.md#スコープ解決ファクトリ)）。利用者向けの入口は二段に分かれる。
 
-- `build_scoped_engine(scope) -> QueryEngine`: スコープ済み・read-only・VIEW 登録済みの QueryEngine を返す低レベルファクトリ
-- `open_store(scope, *, writable) -> DataStore`: run.py 向けの高レベル入口。内部で `build_scoped_engine` を用いる
+- `build_scoped_engine(scope, layout, schemas) -> QueryEngine`: 解決済みスコープから read-only の QueryEngine を返す低レベル入口
+- `open_store(stage, schemas, *, writable) -> DataStore`: run.py 向けの高レベル入口。`StageInfo` 一つから読み取りスコープ（inputs 由来）と書き込み対象（outs 由来）を導出し、内部で `build_scoped_engine` を用いる
 
 依存方向は次のとおりに引く。**CLI のデータ参照コマンド（catalog / validate）は DataStore ファサードに依存せず、スコープ解決ファクトリ（+ Core の SchemaValidator）に依存する**。DataStore は run.py / notebook 向けの祝福されたメイン経路であり、CLI はランタイムのファサードを介さず同じ土台を直接使う。両者はファサードを共有しないため、データ参照のために CLI が DataStore を import することはない。
 
 ドメインスキーマ非依存で動く経路（`fetch()` による直接 SQL）を常に提供する。これは祝福されたメイン経路（`query()`）に対する無保証の抜け道であり、詳細は[設計方針](#守る契約とアクセス経路の保証グラデーション)に従う。
+
+### ProjectLayout
+
+プロジェクトのディレクトリ規約（`stages/`, `config/table_schemas/`, `data/stages/` 等の配置と命名）は ProjectLayout が単一の出所として保持する。パスを構築する処理（スコープ解決ファクトリ・パイプライン生成・StageInfo）はパスを直接組み立てず、すべて ProjectLayout に委譲する。これによりディレクトリ規約の変更が一箇所に閉じる。
+
+ProjectLayout は frozen dataclass であり、プロジェクトルートから各種パスを導出する。
+
+- `root`: プロジェクトルート
+- `stages_dir` / `table_schemas_dir` / `data_stages_dir` 等: 規約上の固定ディレクトリ（root からの導出）
+- `stage_data_dir(stage_name)`: 当該ステージの出力ディレクトリ（`data/stages/<stage_name>/`）
+- `out_abs_path(stage_name, outs_path)`: outs の相対パスから絶対出力パスを解決
+
+テスト時は `ProjectLayout(root=tmp_path)` を与えることで、実ディレクトリに依存せず組み立て・パス解決を検証できる。
 
 ### エンジン差し替え性の二分割
 

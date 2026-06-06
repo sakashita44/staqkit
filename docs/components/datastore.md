@@ -25,6 +25,8 @@ DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走�
 
 生成後は変更不可（スナップショット）。`config/table_schemas/` の YAML を変更したら作り直す。スコープの概念はない（テーブルスキーマ定義はプロジェクト全体で不変）。
 
+コマンド実行ごとに一度だけ生成し、同一コマンド内の全処理で共有する。`staqkit repro` は1ステージ = 1プロセス = 1 DataStore の逐次実行であり、同一プロセス内で複数の DataStore を組み立てるユースケースは現状設計に存在しない。
+
 ### 生成時バリデーション
 
 | 検証項目                   | 挙動                                        |
@@ -76,26 +78,26 @@ TableSchemaSet はいずれにも関与しない。
 
 - テーブル定義の登録 = `config/table_schemas/` に YAML ファイルを追加（人間の操作）
 - エントリ追加 = DataStore の `write_table()`
-- QueryEngine = 読み出し特化（register はファイルを VIEW として読めるようにするだけ）
+- QueryEngine = 読み出し特化（VIEW 登録は組み立て相の EngineBuilder の責務であり、利用者が持つ QueryEngine は read-only）
 
 ## コンストラクタ
 
-DataStore は解決済みデータのみを受け取る。config パス・StageInfo・scope パラメータは受け取らない。
+DataStore は解決済みの構成要素のみを受け取る。config パス・StageInfo・scope パラメータは受け取らず、自身でプロジェクト構成を走査しない。VIEW 登録はスコープ解決ファクトリ（`build_scoped_engine`）が済ませ、DataStore は登録済みの QueryEngine を受け取る。
 
 ```python
 class DataStore:
     def __init__(
         self,
-        tables: dict[str, list[Path]],      # テーブル名 → Parquet パス群（スコープ解決済み）
+        engine: QueryEngine,                  # VIEW 登録済み・read-only の QueryEngine
         schemas: TableSchemaSet,              # プロジェクト全テーブルスキーマの検証済み集合
         output_paths: dict[str, Path] | None = None,  # テーブル名 → 出力先パス
     ): ...
 ```
 
-- `tables`: Project 層のスコープ解決ファクトリが解決した結果。DataStore はこれを QueryEngine に登録する
+- `engine`: スコープ解決ファクトリが対象スコープのファイルを VIEW 登録した結果。DataStore 自身は登録操作を行わず、問い合わせ（`query` / `fetch`）にこの engine を用いる
 - `schemas`: `config/table_schemas/` のパース・検証済みスナップショット。DDL の PK/FK 制約からテーブル間関係を導出する
-- `output_paths`: `None` なら `write_table` は利用不可（CLI 等の読み取り専用用途）
-- DataStore 自体を context manager として提供（`with DataStore(...) as store:`）
+- `output_paths`: `None` なら `write_table` は利用不可（読み取り専用インスタンス）。run.py 経路では `open_store(writable=True)` が `stage` の outs から解決して渡す
+- DataStore 自体を context manager として提供（`with DataStore(...) as store:`）。close 時に engine を解放する
 
 ### 接続ライフサイクル
 
@@ -106,7 +108,7 @@ DataStore のライフサイクル = QueryEngine 接続のライフサイクル�
 
 ## ステージ発見
 
-`stages/**/stage.yaml` を再帰走査してステージ一覧を取得。対応する `data/stages/*/` からファイルを読む。ステージ名は `stages/` からの相対パス。
+`discover_stages(layout) -> list[StageDefinition]` が `stages/**/stage.yaml` を再帰走査してステージ定義一覧を得る。各 StageDefinition の詳細フィールドは [stage.md](stage.md#実行モデル) を参照。対応する `data/stages/*/` からファイルを読む。ステージ名は `stages/` からの相対パス。
 
 - 定義あり・データなし → planned 状態
 - 定義あり・データあり → 通常ステージ
@@ -114,15 +116,52 @@ DataStore のライフサイクル = QueryEngine 接続のライフサイクル�
 
 ## スコープ解決ファクトリ
 
-各ステージの `stage.yaml` の outs セクションを読み、`add_datastore: true` のエントリを同名ファイル（ステム一致）同士で UNION ALL して VIEW 化する。このロジックは Project 層の**スコープ解決ファクトリ**に集約し、二段で提供する。
+DataStore の組み立て（ステージ走査・ファイル収集・スコープ絞り込み・VIEW 登録・スキーマ読み込み）は Project 層のスコープ解決ファクトリに集約する。ファクトリはクラスではなく関数群であり、各ステップは独立して呼び出し・テストできる単位に分かれる。パス規約は [ProjectLayout](../architecture.md#projectlayout) が単一の出所として保持し、各関数はそこへ委譲する。
 
-- `build_scoped_engine(scope) -> QueryEngine`: スコープ済み・read-only・VIEW 登録済みの QueryEngine を返す低レベルファクトリ
-- `open_store(scope, *, writable) -> DataStore`: run.py 向けの高レベル入口。内部で `build_scoped_engine` を用い、QueryEngine と TableSchemaSet をラップした DataStore を返す
+### 組み立てフロー
 
-DataStore と CLI は同じファクトリを共有する。
+コマンド実行ごとに、次の順序で組み立てる。
 
-- run.py 実行時: `run_stage` が inputs の `source_stage` から上流閉包を算出し、`open_store` で書き込み可能な DataStore を得る
-- CLI catalog / validate: `build_scoped_engine` が返す QueryEngine を直接使う（DataStore ファサードを経由しない）。`--up-to` のスコープも DAG を辿って同ファクトリに渡す
+1. `load_schema_set(layout) -> TableSchemaSet`: `config/table_schemas/**/*.yaml` をパース・検証し、プロジェクト全体のスキーマスナップショットを得る。スコープに依存せず、コマンド実行ごとに一度だけ構築する。
+1. `discover_stages(layout) -> list[StageDefinition]`: `stages/**/stage.yaml` を再帰走査し、型付きのステージ定義一覧を得る（[ステージ発見](#ステージ発見)）。
+1. `upstream_closure(stages, inputs) -> ScopeSpec`: 対象ステージの `inputs` を起点に、DAG を遡って到達可能な全ステージを算出する純粋関数。ファイルシステムに触れないため単体テストが容易。
+1. `build_scoped_engine(scope, layout, schemas) -> QueryEngine`: `scope` に含まれるステージの `add_datastore: true` な outs を、同名テーブル（ステム一致）ごとに UNION ALL して VIEW 登録し、read-only の QueryEngine を返す。
+1. 上記を結線して DataStore を構築する。
+
+`ScopeSpec` は解決済みのステージ集合を表す。上流閉包の算出は呼び出し側（`run_stage` / CLI）の責務であり、`build_scoped_engine` は「与えられた集合のファイルを集めて VIEW 化する」ことに専念する。外部データ（`data/external/<source>/<stage>/`）を扱う場合に備え、`ScopeSpec` はソースを区別できる形（内部ソースを既定とする）で定義する。
+
+### 入口
+
+ファクトリの入口はコンテキスト別に分かれる。
+
+- 低レベル（CLI データ参照）: `build_scoped_engine(scope, layout, schemas) -> QueryEngine`。解決済みスコープから read-only の QueryEngine を返す。CLI の catalog / validate が直接使う。
+- run.py（管理下）: `open_store(stage, schemas, *, writable=True) -> DataStore`。引数の `StageInfo` 一つから、読み取りスコープ（`stage` の inputs 由来の上流閉包）と書き込み対象（`stage` の outs 由来の出力パス）の双方を導出し、内部で `build_scoped_engine` を用いて DataStore を組み立てる。`writable=False` のときは出力パスを与えず読み取り専用とする。
+- notebook / 管理外（読み取り専用）: `open_scoped_store(root, *, up_to=None) -> DataStore`。`StageInfo` を持たない管理外コンテキスト向けの入口。プロジェクトルートから layout・stages・schemas を構築し、`up_to` 指定時はそのステージ群の上流閉包、未指定時は全ステージをスコープとして、出力パスなし（読み取り専用）の DataStore を返す。
+
+```python
+# notebook から管理下データを読む（管理境界インターフェース）
+with open_scoped_store(Path("."), up_to=["normalize"]) as store:
+    df = store.query("timeseries", {"subject_id": [1, 2]})
+```
+
+`open_scoped_store` は管理外から管理下データを参照する祝福された読み取り口であり、DataStore を手で構築する必要をなくす。書き込みは run.py（管理下）でのみ行うため read-only に固定する。
+
+`StageInfo` は [ProjectLayout](../architecture.md#projectlayout) を委譲先に持つため、`open_store` は `stage` から layout を辿れる。読み取りスコープが inputs、書き込み対象が outs、という対応が `StageInfo` 一点に集約され、両者を別経路で渡す曖昧さを排除する。
+
+`schemas` を `stage` に内包させず別引数で受けるのは、TableSchemaSet がスコープ非依存のプロジェクト全体スナップショットであり、`load_schema_set` でコマンド実行ごとに一度だけ構築して全成果物（QueryEngine 直利用の CLI 経路と DataStore 経路の双方）で共有する単位だからである。ステージごとに変わる `stage` と、コマンド全体で不変の `schemas` はライフサイクルが異なるため、引数として分離する。
+
+### コマンド別に必要な構成要素
+
+組み立ての各成果物は、コマンドの目的に応じて必要なものだけを構築する。
+
+| コマンド                         | TableSchemaSet | QueryEngine            | DataStore                      |
+| -------------------------------- | -------------- | ---------------------- | ------------------------------ |
+| run.py（run_stage 経由）         | 必要           | 必要                   | 必要（open_store）             |
+| `staqkit catalog`                | 必要           | 必要                   | 不要（build_scoped_engine 直） |
+| `staqkit validate`               | 必要           | スキーマ準拠検査時のみ | 不要                           |
+| `staqkit dag` / `staqkit status` | 不要           | 不要                   | 不要                           |
+
+`staqkit validate` の config 整合性検査（参照整合性・FK 整合性）は TableSchemaSet と StageDefinition のみで成立し、QueryEngine を要しない。Parquet の DDL 準拠検査を行うときにのみ `build_scoped_engine` を併用する。
 
 ## 読み取り API
 
@@ -131,38 +170,50 @@ DataStore と CLI は同じファクトリを共有する。
 ### 高レベル API（query・祝福されたメイン経路）
 
 ```python
-def query(self, table: str, filters: dict[str, Any] | None = None) -> pl.DataFrame:
-    """バリデーション付きショートカット（等値/IN フィルタ）"""
+def query(
+    self,
+    table: str,
+    filters: dict[str, object | list[object]] | None = None,
+    columns: list[str] | None = None,
+) -> pl.DataFrame:
+    """バリデーション付きショートカット（等値/IN フィルタ + 列射影）"""
 ```
 
 ```python
 store = DataStore(...)
 df = store.query("timeseries", {"subject_id": [1, 2], "dkey": ["A", "B"]})
+cols = store.query("timeseries", {"subject_id": [1]}, columns=["uid", "frame", "value"])
 ```
 
 - `table`: 必須。SQL の FROM 句に相当
-- `filters`: dict 形式。等値一致（`=`）/ リスト一致（`IN`）のみ
+- `filters`: dict 形式。等値一致（`=`）/ リスト一致（`IN`）のみ。値がリストなら `IN`、それ以外は等値
+- `columns`: 取得列を限定する射影。`None` なら全列。指定した列名は TableSchemaSet で実在を検証する
 - 範囲条件・JOIN・集計が必要な場合は `fetch()` で SQL を書く
-- query() の役割: DDL 情報（TableSchemaSet）を使ったランタイムバリデーション（テーブル名・キー名・型の検証）+ dict → SQL 変換
+- query() の役割: DDL 情報（TableSchemaSet）を使ったランタイムバリデーション（テーブル名・キー名・列名・型の検証）と dict から SQL への変換
+- 結果は対象テーブルの主キー昇順で返す。複合主キーの場合は DDL の宣言順に列を連ねた昇順とする。複数ファイルを UNION ALL した VIEW は行順序が不定であり、query() は決定的な順序を保証して再現性を担保する。順序保証のコストを避けたい大規模ケースでは `fetch()` で明示的に順序を指定する
 
 ### 低レベル API（fetch・無保証の抜け道）
 
 ```python
-def fetch(self, sql: str) -> pl.DataFrame:
+def fetch(self, sql: str, params: Sequence[Any] | None = None) -> pl.DataFrame:
     """SQL の全表現力（SELECT 系のみ）。VIEW 定義済みの状態で実行"""
 ```
 
 ```python
-df = store.fetch("""
+df = store.fetch(
+    """
     SELECT t.uid, t.frame, t.value
     FROM timeseries t
     JOIN dtype d ON t.dkey = d.dkey
-    WHERE d.data_group = 'joint'
-      AND d.coordinate = 'flexion'
-""")
+    WHERE d.data_group = ?
+      AND d.coordinate = ?
+    """,
+    ["joint", "flexion"],
+)
 ```
 
 - SELECT（CTE、VALUES 含む）のみ許可。INSERT/UPDATE/DELETE/DDL は拒否。この制約は QueryEngine Protocol の責務（`fetch` の契約）
+- `params`: プレースホルダ（`?`）へバインドする値。`fetch` は値を文字列連結せずエンジン側でバインドするため、利用者が値を SQL に直接埋め込む際のクォート漏れ・型崩れを避けられる
 - DuckDB 実装では `read_only=True` の接続オプションでエンジンレベルで保証する。SQL パースによる判定は行わない
 - `fetch` は無保証の抜け道だが、登録済み VIEW しか参照できないためスコープ安全は崩れない。`query()` の契約検証（テーブル名・キー名・型）だけが失われる
 - 接続オブジェクトは staqkit 実装内では公開しない。フルカタログへ繋がれてスコープ安全が崩れること、および保守者のエンジン差し替え性が損なわれることを避けるため。最深の抜け道は `fetch` までとする
@@ -228,8 +279,12 @@ outs:
 ## メタデータ API
 
 ```python
+@property
+def schemas(self) -> TableSchemaSet:
+    """プロジェクト全テーブルスキーマの検証済みスナップショット"""
+
 def tables(self) -> list[str]:
-    """登録済みテーブル一覧"""
+    """登録済みテーブル一覧（スコープ内）"""
 
 def columns(self, table: str) -> list[str]:
     """カラム名のリスト。存在しないテーブルは KeyError"""
@@ -239,7 +294,8 @@ def schema(self, table: str) -> TableSchema:
     存在しないテーブルは KeyError"""
 ```
 
-- `columns()` は型情報なし。主用途はクエリ組み立て時のカラム名確認。型の不一致は `write_table()` のバリデーションが検出する
+- `schemas`: コンストラクタで受け取った TableSchemaSet をそのまま露出する。カラム横断検索や FK 関係グラフなど、スキーマ内省の全 API（[公開 API](#公開-api)）への直接経路。`tables()` がスコープ内（今このコンテキストで引ける）テーブルを返すのに対し、`schemas` はプロジェクトに定義された全テーブルを表す
+- `columns()` / `schema()` は `schemas` 経由の内省を日常用途向けに短縮した近道。`columns()` は型情報なしで、主用途はクエリ組み立て時のカラム名確認。型の不一致は `write_table()` のバリデーションが検出する
 - `schema()` は DDL パース結果の全情報を返す。Project 層内部や将来の拡張用途に対応
 
 ## テーブル結合のスキーマ契約
@@ -306,6 +362,8 @@ validation:
 - `off`: 検証なし
 - `constraint`: カラム名・型 + 全制約検証。PK 重複・FK は既存 VIEW に対する JOIN で検証
 
+FK 検証は読み取りスコープに依存する。write_table の FK 検証は、参照先テーブルがそのステージの読み取りスコープ（inputs 由来の上流閉包）に VIEW として存在する場合にのみ実行できる。したがって FK で参照するテーブルを生成する上流ステージは inputs に含めることを要件とする。inputs に含めず参照先がスコープ外となる場合、その FK は write 時に検証されない既知の限界として扱い、リポジトリ全体を横断する `staqkit validate` の FK 整合性検査で補完する。
+
 書き込み時に `schema`（カラム名・型のみ、制約スキップ）レベルは提供しない。write_table はステージ出力の最終ゲートであり、制約違反を含むデータが DataStore に混入すると下流全体に波及する。開発中の高速イテレーションでは `off` で検証自体を無効化する。
 
 ### 検証クエリの生成
@@ -317,38 +375,51 @@ validation:
 
 DDL に記載のカラムに対応する `column_descriptions` がない場合、`staqkit validate` で警告を出力する。エラーにはしない（TableSchemaSet の組み立て自体は可能）。`column_descriptions` に DDL に存在しないカラム名が含まれる場合は TableSchema 生成時にエラー。
 
-## QueryEngine Protocol
+## エンジンの二相: EngineBuilder と QueryEngine
 
-### 責務
+クエリエンジンは「組み立て相」と「問い合わせ相」を型で分離する。可変状態（接続への VIEW 登録）が変化する窓を組み立て相に閉じ込め、利用者が受け取る問い合わせ相からは VIEW を変更する操作を型から取り除く。これにより「組み立て後のエンジンは不変」という不変条件を、規約ではなく型で保証する。可変状態は接続という不可避な一点に局所化され、その変化窓は組み立て相だけに閉じる。
 
-- Parquet ファイル群を名前付きでクエリ可能にする（VIEW ベースを前提）
-- SELECT 系 SQL の実行（読み取り専用を保証）
-- 内部リソース（VIEW・接続）のライフサイクル管理
+両者はあわせて差し替え可能な継ぎ目を成す（[architecture.md](../architecture.md#エンジン差し替え性の二分割)）。エンジンを置換する保守者は両 Protocol を実装するが、単一の接続オブジェクトが両者を満たしてよい。
 
-### 責務外
+### 責務外（両相に共通）
 
 - DDL のパース・制約検証（DataStore 側）
-- メタデータ管理（テーブル一覧・カラム情報）（DataStore 側）
-- ファイルパスの解決・走査（Project 層）
+- メタデータ管理（テーブル一覧・カラム情報）（TableSchemaSet / DataStore 側）
+- ファイルパスの解決・走査（Project 層のスコープ解決ファクトリ）
 - データの正確性保証（register は渡されたものをそのまま登録するだけ）
 
-### Protocol メソッド
+### EngineBuilder（組み立て相）
+
+スコープ解決ファクトリの内部だけで用いる。VIEW を登録し、封印して読み取り専用の QueryEngine を返す。
+
+```python
+class EngineBuilder(Protocol):
+    def register(self, name: str, files: list[Path]) -> None:
+        """files を UNION ALL 相当で結合し name でクエリ可能にする"""
+
+    def seal(self) -> "QueryEngine":
+        """登録を確定し、以降変更不可能な読み取り専用 QueryEngine を返す"""
+```
+
+- `register`: ファイル群を結合し指定名で VIEW 化する。データの正確性は検証しない。全データのメモリコピーを前提としない
+- `seal`: 組み立てを終え、register を持たない QueryEngine を返す。`build_scoped_engine` はこの戻り値を返す
+
+### QueryEngine（問い合わせ相）
+
+DataStore と CLI が保持する。read-only であり、VIEW を変更する操作を持たない。
 
 ```python
 class QueryEngine(Protocol):
-    def register(self, name: str, files: list[Path]) -> None:
-        """files を結合し name でクエリ可能にする"""
-
-    def fetch(self, sql: str) -> pl.DataFrame:
+    def fetch(self, sql: str, params: Sequence[Any] | None = None) -> pl.DataFrame:
         """SELECT 系の SQL を実行し結果を返す（読み取り専用を保証）"""
 
     def close(self) -> None:
         """リソース解放"""
 ```
 
-- `register`: ファイル群を UNION ALL 相当で結合し、指定名でクエリ可能にする。データの正確性は検証しない。全データのメモリコピーを前提としない
-- `fetch`: SELECT（CTE、VALUES 含む）のみ許可。INSERT/UPDATE/DELETE/DDL は拒否
+- `fetch`: SELECT（CTE、VALUES 含む）のみ許可。INSERT/UPDATE/DELETE/DDL は拒否。`params` でプレースホルダに値をバインドし、文字列連結による組み立てを避ける
 - `close`: 内部リソースの解放。DataStore が context manager として `close` を呼び出す
+- register を持たないため、組み立て後に VIEW を追加・変更できない（状態の変化窓は EngineBuilder に閉じる）
 
 ### VIEW vs TABLE
 
@@ -361,7 +432,7 @@ Protocol は VIEW ベースを前提とする。TABLE 対応は将来のパフ�
 
 ## 外部データアクセス
 
-外部リポジトリからインポートしたデータも、Project 層のスコープ解決ファクトリ（[#スコープ解決ファクトリ](#スコープ解決ファクトリ)）経由でアクセスする。DataStore 自体は「データが外部由来かどうか」を知る必要がない。ファクトリが外部ディレクトリ（`data/external/<source>/<stage>/`）を走査して `tables` / `schemas` を組み立て、通常のコンストラクタに渡す。
+外部リポジトリからインポートしたデータも、Project 層のスコープ解決ファクトリ（[スコープ解決ファクトリ](#スコープ解決ファクトリ)）経由でアクセスする。DataStore 自体は「データが外部由来かどうか」を知る必要がない。ファクトリが外部ディレクトリ（`data/external/<source>/<stage>/`）を走査して VIEW 登録した QueryEngine と TableSchemaSet を組み立て、通常のコンストラクタに渡す。`ScopeSpec` がソースを区別する形をとるのは、この外部ソースを内部ステージと同じ経路に載せるためである。
 
 ### 非 Parquet データの発見
 

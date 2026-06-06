@@ -60,6 +60,23 @@ outs:
 - DataStore VIEW のテーブル名はファイル名ステムから導出（例: `timeseries.parquet` → `timeseries` VIEW）
 - 将来の拡張（`cache: false` 等）は value オブジェクトにフィールド追加で対応
 
+各エントリは `OutsEntry`（frozen dataclass）として型付けし、key を内包して自己完結させる。
+
+```python
+@dataclass(frozen=True)
+class OutsEntry:
+    key: str            # outs の辞書キー。プログラム上の識別子
+    path: Path          # data/stages/{name}/ からの相対パス
+    add_datastore: bool
+
+    @property
+    def table_name(self) -> str:
+        """DataStore VIEW のテーブル名。add_datastore: true の場合のみ意味を持つ"""
+        return self.path.stem
+```
+
+`StageDefinition.outs` は `list[OutsEntry]` として保持し、key の一意性はパース時に検証する。key（プログラム上の識別子）と `table_name`（VIEW 名 = ステム）を分離するのは、テーブルとそれに対応する非テーブル出力（同じステムを持つ図など）を同一ステージから出力する場合にステムが衝突しうるためである。
+
 バリデーション規則:
 
 - `add_datastore: true` かつ拡張子 ≠ `.parquet` → エラー
@@ -321,8 +338,23 @@ README に書かないもの（他所がSSoT）: パラメータ値（→ stage.
 補助的なデータクラス:
 
 - **StageDefinition**: stage.yaml の型付き表現（StageInfo の構築元）
+- **OutsEntry**: outs の各エントリの型付き表現（[outs 統一スキーマ](#outs-統一スキーマ)）
 - **RunMeta**: 実行記録（run_stage のエピローグで生成）
 - **TableSchema**: テーブル定義（カラム・型・制約・カタログ出力設定）
+
+StageDefinition は stage.yaml をパースした frozen dataclass であり、次のフィールドを持つ。ステージ走査（`discover_stages`）が `list[StageDefinition]` を返し、グラフ操作（パイプライン生成・参照整合性検査）はパス解決を伴わない本表現を用いる。
+
+| フィールド | 内容                                   | 由来                    |
+| ---------- | -------------------------------------- | ----------------------- |
+| name       | ステージ名（`stages/` からの相対パス） | ディレクトリ位置        |
+| desc       | 1行説明                                | stage.yaml `desc`       |
+| status     | active / planned / inactive            | stage.yaml `status`     |
+| outs       | `list[OutsEntry]`                      | stage.yaml `outs`       |
+| params     | パラメータ辞書                         | stage.yaml `params`     |
+| inputs     | source_stage のリスト                  | stage.yaml `inputs`     |
+| extra_deps | key → パスの辞書                       | stage.yaml `extra_deps` |
+
+StageInfo は StageDefinition に [ProjectLayout](../architecture.md#projectlayout) を束ねた実行時ビューであり、`out_path()` / `extra_dep()` 等のパス解決を ProjectLayout へ委譲する。単一ステージの run.py 文脈に注入されるのは StageInfo、グラフ走査に用いるのは StageDefinition、と用途で使い分ける。
 
 StageInfo は status によって挙動を変えない。planned/active の区別はオーケストレーション層（dvc.yaml 生成時に planned ステージを除外する等）の責務である。
 
