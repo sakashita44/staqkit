@@ -110,12 +110,12 @@ staqkit column <column_name>
 指定カラム名の全テーブルでの出現箇所を横断検索する。`schema <table>` がテーブル軸の内省であるのに対し、`column` はカラム軸で `config/table_schemas/` を横断する。
 
 ```bash
-staqkit column uid
-# record.uid      PK              試行一意識別子（subject_id × trial_id で決定）
-# timeseries.uid  FK→record(uid)  （参照先 record.uid の description を表示）
+staqkit column dkey
+# dtype.dkey       PK                  データ種別の識別子（辞書テーブルの主キー）
+# timeseries.dkey  PK  FK→dtype(dkey)  （参照先 dtype.dkey の description を表示）
 ```
 
-カラムの役割（PK/FK/通常）・description・FK 参照先を表示する。TableSchemaSet の `find_column()` が返す [ColumnOccurrence](datastore.md#公開-api) を整形して出力する。データの置き場所（table_schema）と見せ方（CLI）の分離により、発見性・引き継ぎ性を実現する。
+各出現箇所について、PK か・FK か（両立しうる）・description・FK 参照先を表示する。`timeseries.dkey` のように複合 PK の一部かつ他テーブルへの FK である列は、両方のマーカーを併記する（[直交する2フィールド](datastore.md#公開-api)）。TableSchemaSet の `find_column()` が返す [ColumnOccurrence](datastore.md#公開-api) を整形して出力する。データの置き場所（table_schema）と見せ方（CLI）の分離により、発見性・引き継ぎ性を実現する。
 
 ### staqkit catalog
 
