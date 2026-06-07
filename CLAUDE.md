@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [docs/distribution.md](docs/distribution.md) — 位置づけと配布（正体・パッケージ配布・Copier 雛形伝播）
 - [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
 - [docs/components/datastore.md](docs/components/datastore.md) — DataStore（識別軸定義・クエリAPI・バリデーション）
-- [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・実行モデル・run_meta）
+- [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・実行モデル・来歴）
 - [docs/components/pipeline-gen.md](docs/components/pipeline-gen.md) — パイプライン生成（dvc.yaml導出・バリデーション）
 - [docs/components/cli.md](docs/components/cli.md) — CLI リファレンス（全コマンド一覧）
 - [docs/components/external-data.md](docs/components/external-data.md) — 外部データ（DAG間合成・dvc import）
