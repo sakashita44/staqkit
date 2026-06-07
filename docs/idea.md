@@ -24,7 +24,7 @@
     - **B. 個別検証コマンドの公開**: `staqkit check-schema`, `staqkit check-refs` 等を独立コマンドとして提供
     - **C. validate 内部の責務分割のみ**: API レベルで分割し、CLI は引き続き `staqkit validate` を統合エントリとする
     - **D. 編集中の即時フィードバック**: pre-commit や IDE 連携（LSP 風）で個別検証を自動実行
-- **関連**: #3（エラーハンドリング・設計判断の策定）, [components/cli.md](components/cli.md)
+- **関連**: #19（validate 実装時仕様の確定 — 検査群の個別実行可能化）, [components/cli.md](components/cli.md)
 
 ---
 

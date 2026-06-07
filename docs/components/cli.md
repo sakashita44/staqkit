@@ -1,6 +1,6 @@
 # CLI リファレンス
 
-全コマンドは `staqkit` プレフィックスで統一する。各コマンドは Project 層を呼び出す薄いラッパーである。データを参照するコマンド（catalog / validate）は、Project 層のスコープ解決ファクトリ（`build_scoped_engine`）と Core 層の SchemaValidator を用い、run.py / notebook 向けの DataStore ファサードには依存しない（[architecture.md](../architecture.md#スコープ解決ファクトリと依存方向)）。
+全コマンドは `staqkit` プレフィックスで統一する。各コマンドは Project 層を呼び出す薄いラッパーである。データ実体を参照するコマンド（catalog / validate（スキーマ準拠検査時のみ））は、Project 層のスコープ解決ファクトリ（`build_scoped_engine`）と Core 層の SchemaValidator を用い、run.py / notebook 向けの DataStore ファサードには依存しない（[architecture.md](../architecture.md#スコープ解決ファクトリと依存方向)）。スキーマ内省コマンド（schema / column）はデータ実体を要さず、TableSchemaSet（`load_schema_set`）のみで成立する。
 
 ## パイプライン操作
 
@@ -67,16 +67,66 @@ staqkit clean --remove     # 確認の上、実際に削除
 - `data/stages/xxx/` が存在するが対応する `stage.yaml` がない（孤児）
 - `data/stages/xxx/` が存在し、status が inactive（休止中データ）
 
+### staqkit import
+
+```bash
+staqkit import --repo <url> --stages <list>
+```
+
+外部リポジトリからデータをインポートする。詳細は [外部データ](external-data.md) を参照。
+
+## スキーマ内省・カタログ出力
+
+これらのコマンドは「テーブルの構造・意味」と「テーブルの実体（行）」を別々に見せる。`schema` / `column` は `config/table_schemas/`（[TableSchemaSet](datastore.md#tableschemaset)）由来で、データ実体がなくても引ける構造・意味の面を出力する。`catalog` は `data/stages/` 由来で、スコープ内の実データ行をダンプする。
+
+### staqkit schema
+
+```bash
+staqkit schema           # 定義済みテーブル名の一覧 + 各テーブルの desc
+staqkit schema <table>   # 単一テーブルの全スキーマ
+```
+
+引数なしでプロジェクトに定義された全テーブル（`config/table_schemas/`）の名前と1行説明を一覧する。引数を与えると、そのテーブルのカラム・型・PK/FK・CHECK/UNIQUE/NOT NULL 制約と `column_descriptions`、`catalog` フラグを表示する。データ実体を要さないため、planned テーブル（定義のみ・データ未生成）も対象となる。
+
+```bash
+staqkit schema timeseries
+# timeseries — 正規化済み時系列データ
+#   uid    VARCHAR  NOT NULL  PK                  試行一意識別子（subject_id × trial_id で決定）
+#   dkey   VARCHAR  NOT NULL  PK  FK→dtype(dkey)  データ種別識別子
+#   frame  INTEGER            PK  CHECK(frame>=0) フレーム番号（0始まり）
+#   value  DOUBLE                                 測定値。意味と単位は dkey に従属
+#   primary key: (uid, dkey, frame)
+#   catalog: true
+```
+
+TableSchemaSet の `table_names()` / `get(table)`（[公開 API](datastore.md#公開-api)）を集約して表示する。
+
+### staqkit column
+
+```bash
+staqkit column <column_name>
+```
+
+指定カラム名の全テーブルでの出現箇所を横断検索する。`schema <table>` がテーブル軸の内省であるのに対し、`column` はカラム軸で `config/table_schemas/` を横断する。
+
+```bash
+staqkit column dkey
+# dtype.dkey       PK                  データ種別の識別子（辞書テーブルの主キー）
+# timeseries.dkey  PK  FK→dtype(dkey)  （参照先 dtype.dkey の description を表示）
+```
+
+各出現箇所について、PK か・FK か（両立しうる）・description・FK 参照先を表示する。`timeseries.dkey` のように複合 PK の一部かつ他テーブルへの FK である列は、両方のマーカーを併記する（[直交する2フィールド](datastore.md#公開-api)）。TableSchemaSet の `find_column()` が返す [ColumnOccurrence](datastore.md#公開-api) を整形して出力する。データの置き場所（table_schema）と見せ方（CLI）の分離により、発見性・引き継ぎ性を実現する。
+
 ### staqkit catalog
 
 ```bash
-staqkit catalog                          # config で catalog: true な全テーブル → stdout
+staqkit catalog                          # config で catalog: true な全テーブルのエントリ → stdout
 staqkit catalog --table dtype timeseries # 指定テーブルのみ → stdout
-staqkit catalog --up-to B Y             # スコープ付き（B, Y の上流閉包のみ）→ stdout
-staqkit catalog --table dtype --up-to B  # テーブル指定 + スコープ → stdout
+staqkit catalog --up-to normalize analyze     # スコープ付き（normalize, analyze の上流閉包のみ）→ stdout
+staqkit catalog --table dtype --up-to normalize  # テーブル指定 + スコープ → stdout
 ```
 
-`config/table_schemas/` で `catalog: true` に設定されたテーブルの内容を一覧出力する。`--table` で明示指定した場合はそちらが優先される。
+`config/table_schemas/` で `catalog: true` に設定されたテーブルのエントリ（実データ行）を一覧出力する。`schema` が構造を見せるのに対し、`catalog` は参照テーブル（`dtype` 辞書等）の中身を人間可読な目録として publish する。`--table` で明示指定した場合はそちらが優先される。planned テーブル（定義のみ・データ未生成）を指定した場合は空出力とし、エラーにはしない（スコープ内に存在する行を出すコマンドであり、行が無いことは異常ではない）。
 
 出力は常に stdout。ファイルへの保存はパイプで行う。
 
@@ -86,31 +136,6 @@ staqkit catalog > docs/dtype_catalog.md
 ```
 
 `--up-to` は Project 層の[スコープ解決](datastore.md#スコープ解決ファクトリ)と同じ原理で、指定ステージの上流閉包（DAG を遡って到達可能な全ステージ）に出力を限定する。特定ステージの依存範囲だけを確認したい場合に使う。
-
-### staqkit column
-
-```bash
-staqkit column <column_name>
-```
-
-指定カラム名の全テーブルでの出現箇所を横断検索する。`config/table_schemas/` の DDL と `column_descriptions` を集約して表示する。
-
-```bash
-staqkit column uid
-# → record.uid [PK]: "試行一意識別子（subject_id × trial_id で決定）"
-# → timeseries.uid [FK → record(uid)]: （参照先の description を表示）
-# → ...全テーブルでの出現箇所
-```
-
-カラムの役割（PK/FK/通常）、description、FK 参照先を表示する。データの置き場所（table_schema）と見せ方（CLI）の分離により、発見性・引き継ぎ性を実現する。
-
-### staqkit import
-
-```bash
-staqkit import --repo <url> --stages <list>
-```
-
-外部リポジトリからデータをインポートする。詳細は [外部データ](external-data.md) を参照。
 
 ## プロヴェナンス
 

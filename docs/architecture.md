@@ -167,6 +167,57 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 - **データクラスバリデーション**: Pydantic dataclasses（StageDefinition, RunMeta 等）
 - **DAG 構築・循環検出**: networkx
 
+### エラーハンドリング
+
+staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の性質で4系統に分ける。系統は[アクセス経路の保証グラデーション](#守る契約とアクセス経路の保証グラデーション)と対応し、利用者・CLI は系統単位で捕捉できる。本階層は実行を止める例外の分類であり、検査が報告する警告（`column_descriptions` 未記述、active が planned を参照する等）は例外を投げず[人間向けエラー報告](#人間向けエラー報告)の警告チャネルで扱う。パラメータ整合（stage.yaml の params と run_meta の乖離）はどの系統にも割り当てない。params 編集による鮮度低下は params を決定的に追跡する `dvc status`（[状態モデル](#状態モデル)）が担い、自動生成記録である run_meta と stage.yaml の整合は、可変な git 管理ファイル間に validate の特権的な基準を置けないため git の差分・レビュー・履歴に委ねる。公開・引き継ぎ前にさらに固めたい場合は、可変な設定ファイルどうしを照合する validate ではなく、データ実体ハッシュ・跨ステージのハッシュ連鎖・git 履歴という独立した基準に照らす来歴監査（provenance 系、[#17](https://github.com/sakashita44/staqkit/issues/17)）が適所となる。
+
+| 系統                  | 何の失敗か                                          | 主な発生源                              |
+| --------------------- | --------------------------------------------------- | --------------------------------------- |
+| `ConfigError`         | 設定ファイルの構造的誤り（データ実体不問・設計時）  | table_schemas/ の DDL、stage.yaml、参照 |
+| `ValidationError`     | データ実体がスキーマ契約に反する                    | DataStore の read/write 検証            |
+| `AccessError`         | アクセス経路の保証（スコープ安全・read-only）の違反 | DataStore の query/fetch/write_table    |
+| `StageExecutionError` | ステージ実行後検証の失敗                            | run_stage エピローグ                    |
+
+系統の第一の判別軸は失敗が判明する時点である。設定の読み込み・グラフ構築時（`load_schema_set` / `discover_stages` / パイプライン生成）に判明する誤りは `ConfigError`、データへの問い合わせ・書き込みの実行時に判明する違反は `ValidationError` / `AccessError` となる。
+
+各系統の代表的な具体型は次のとおり。
+
+- `ConfigError`
+    - `SchemaDefinitionError`: DDL パース失敗、table_schema YAML 単体の外形違反（`column_descriptions` が DDL 不在カラムを参照する等）
+    - `StageDefinitionError`: stage.yaml の外形違反、outs key 重複、add_datastore クロス検証違反
+    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。source_stage 不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#上流dag理解)）
+- `ValidationError`
+    - `SchemaMismatchError`: カラム名・型不一致、ステージ間 UNION ALL 非互換
+    - `ConstraintViolationError`: NOT NULL / PK / UNIQUE / CHECK / FK 違反
+- `AccessError`
+    - `ScopeError`: スコープ外（未登録 VIEW）テーブルの参照、query() の不正テーブル名
+    - `WriteError`: read-only インスタンスへの write、自ステージ outs 外への write
+- `StageExecutionError`: post-run 検証で未生成ファイル（declared − actual）を検出した場合等
+
+層配置は依存方向（Project → Core）に従う。基底 `StaqkitError` と系統基底 `ConfigError` / `ValidationError` / `AccessError` は Core 層に置く。`StageExecutionError` は run_stage（Project）だけが送出するため Project 層に置く。具体型は送出箇所の層に置き、対応する系統基底を継承する。ただし複数の層から送出される具体型は、すべての送出元が参照できるよう最下層（Core）に置く。これにより `SchemaDefinitionError`・`ValidationError` 系・`ScopeError`・`ReferenceIntegrityError` は Core、`StageDefinitionError`・`WriteError` は Project となる。`ReferenceIntegrityError` は DAG 循環・FK 参照先不在を Core（DAGBuilder / TableSchemaSet）が、source_stage 不在・active が planned を参照・外部取り込みポインタの構造的不整合を Project（Discovery / Generator）が送出する両層またがりの型のため、双方から参照できる Core 側に置く。Project の具体型が Core の系統基底を継承するのは依存方向に沿う。系統基底（性質の分類）と送出層（実装上の所在）は独立であり、たとえば `ConfigError` は Core に置くが具体型 `StageDefinitionError` は Project が送出する。利用者が捕捉する公開面は `staqkit.errors` に re-export する。
+
+#### 人間向けエラー報告
+
+`staqkit validate` / `staqkit repro` は機械可読な例外を、解析者が直せる形に整形して報告する。
+
+- 失敗を源泉（`config/` / `stages/` / `data/`）でグループ化する
+- 各項目に「場所（ファイルパスや stage 名）・原因・直し方」を併記する
+- エラーと警告を区別し、末尾にサマリ行（件数）を出して非ゼロ終了する（警告のみなら 0 終了）
+
+```text
+$ staqkit validate
+config/table_schemas/
+  error  timeseries.yaml: FK 参照先テーブル 'dtype' が存在しない
+         直し方: config/table_schemas/dtype.yaml を作成するか REFERENCES 先を修正
+stages/
+  error  normalize: source_stage 'import' が存在しない (stages/normalize/stage.yaml)
+         直し方: inputs.source_stage を実在するステージ名に修正
+  warn   analyze: 依存先 'preprocess' は planned（データ未生成）
+         直し方: preprocess を実装するまで analyze は repro できない
+
+2 errors, 1 warning
+```
+
 ## 設計原則マッピング
 
 | 設計原則         | 実現手段                                                                                             |
@@ -179,15 +230,15 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 
 核要求:
 
-| 要求                | 実現手段                                                        |
-| ------------------- | --------------------------------------------------------------- |
-| T1 来歴到達性       | run_meta.yaml（実行事実の記録）+ プロヴェナンスチェーン         |
-| U1 意味的同一性     | 識別軸属性（DDL の PK）の組み合わせによる一意特定               |
-| U2 多軸クエリ面     | DataStore クラス（唯一の読み取り口）の query() + fetch()        |
-| U3 カタログ         | TableSchemaSet 由来のカタログ出力 + DAG マップ生成              |
-| U4 意味到達性       | description 3層構造 + column_descriptions                       |
-| M1 契約強制         | DDL（table_schemas）による契約宣言 + DataStore 読み書き時の検証 |
-| M2 不変性と純粋関数 | 書き込み対象の outs 限定 + run_stage エピローグ検証 + DVC 復元  |
+| 要求                | 実現手段                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------- |
+| T1 来歴到達性       | run_meta.yaml（実行事実の記録）+ プロヴェナンスチェーン                                  |
+| U1 意味的同一性     | 識別軸属性（DDL の PK）の組み合わせによる一意特定                                        |
+| U2 多軸クエリ面     | DataStore クラス（唯一の読み取り口）の query() + fetch()                                 |
+| U3 カタログ         | スキーマ構造の出力（schema / column）+ 参照テーブルの目録出力（catalog）+ DAG マップ生成 |
+| U4 意味到達性       | description 3層構造 + column_descriptions                                                |
+| M1 契約強制         | DDL（table_schemas）による契約宣言 + DataStore 読み書き時の検証                          |
+| M2 不変性と純粋関数 | 書き込み対象の outs 限定 + run_stage エピローグ検証 + DVC 復元                           |
 
 委譲する関心:
 
