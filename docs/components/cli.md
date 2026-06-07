@@ -43,15 +43,19 @@ staqkit add-stage <path> [--status <active|planned|inactive>]
 ### staqkit validate
 
 ```bash
-staqkit validate
+staqkit validate                       # 全検査群を統合実行
+staqkit validate --target schema       # スキーマ系のみ
+staqkit validate --target references   # 参照整合性のみ
+staqkit validate --target descriptions # description 網羅検査のみ
 ```
 
-横断的なフルチェックを実行する。
+引数なしで横断的なフルチェックを実行する。検査は内部で検査群に分割され、`--target` で対象を絞って編集ループ中の部分検証に使える。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
 
-- 参照整合性（source_stage の実在確認・循環検出）
-- スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）
-- TableSchemaSet 整合性（FK 参照先の存在・型一致）
-- column_descriptions 未記述の警告
+- 参照整合性（source_stage の実在確認・循環検出）: `--target references`
+- スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
+- description 網羅検査（説明欄充足・説明系ファイル存在）と column_descriptions 未記述の警告: `--target descriptions`
+
+検査群の実装時仕様の確定は [#19](https://github.com/sakashita44/staqkit/issues/19) で追跡する。
 
 ## データ管理
 
