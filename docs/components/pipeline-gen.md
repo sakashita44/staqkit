@@ -32,11 +32,15 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 - **planned**: dvc.yaml に含めない（DAG可視化は stage.yaml ベースで別途生成）
 - **inactive**: dvc.yaml に含めない。下流も再帰的に除外
 
+active ステージが inputs で planned ステージを参照する場合、参照先 outs は dvc.yaml に存在せず実行できない。`staqkit validate` は警告に留め、`staqkit repro` は `ReferenceIntegrityError` で停止する（[stage.md](stage.md#active-が-planned-を参照した場合)）。検査は実行対象（effective-active）にのみ発火するため、planned から planned への参照は対象外。
+
 ## バリデーション
 
 | 検査項目                                           | validate（フル） | repro（最小限） |
 | -------------------------------------------------- | ---------------- | --------------- |
 | 参照整合性（source_stage 実在・循環検出）          | YES              | YES             |
+| active が planned を inputs 参照                   | YES（警告）      | YES（エラー）   |
+| extra_deps の glob が 0 件マッチ                   | YES（エラー）    | YES（エラー）   |
 | スキーマ整合性（parquet vs config/table_schemas/） | YES              | ---             |
 | TableSchemaSet 整合性（FK 参照先・型一致）         | YES              | ---             |
 | column_descriptions 未記述                         | YES（警告）      | ---             |

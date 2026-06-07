@@ -132,6 +132,17 @@ inputs の役割:
 - planned + inputs 未記述 → DAG 上で浮いた位置に表示
 - planned + source_stage 記述済み → その先に点線で表示（スコープは絞らない）
 
+### active が planned を参照した場合
+
+active ステージが inputs の source_stage で planned ステージ（データ実体なし）を参照する状態は、「実行可能なステージが未実装の依存に依存する」設計矛盾を表す。検査は実際に実行されるステージ（effective-active）に対してのみ発火する。ここで effective-active とは宣言 active かつ [suppressed](#宣言的状態と実効状態) でない状態を指し、dvc.yaml に含まれないステージ（planned・inactive・suppressed）は発火対象から外れる。したがって planned から planned への参照は対象外となる（DAG 可視化目的の参照として許容する）。これは特例ではなく、同一ルールが「実行されないステージには発火しない」帰結である。
+
+- `staqkit validate`（設計時レビュー）: 警告。issue 駆動開発で下流を先に定義し上流を順次実装する途中段階を許容し、編集を止めない
+- `staqkit repro`（実行ゲート）: エラー。planned の参照先 outs は実体がなく active ステージは実行できないため、DVC 呼び出し前に `ReferenceIntegrityError` で停止する
+
+この段階差は[アクセス経路の保証グラデーション](../architecture.md#守る契約とアクセス経路の保証グラデーション)と同じ思想であり、設計時は緩く、実行時に硬く扱う。
+
+planned を参照する active が repro でエラー停止するのに対し、inactive を参照する active は [inactive 伝搬](#inactive-伝搬と-suppressed-状態)で suppressed となり、エラーにならず dvc.yaml から静かに除外される。この非対称は、inactive が「意図的な休止（上流を active に戻せば下流も自動復帰）」を表すのに対し、planned は「未実装（参照先の実体がそもそも存在しない）」を表すという意味の違いに由来する。前者は復帰可能な一時状態として伝搬で扱い、後者は依存の欠落として実行時に顕在化させる。
+
 ### source_stage 指定漏れの既知の限界
 
 source_stage の指定漏れは「データの不在」ではなく「データの不足」を引き起こす。スコープ内のデータだけでクエリが成功し、エラーなく処理が完了するが、本来必要なデータが静かに欠落した不完全な結果が出力される可能性がある。
@@ -152,6 +163,7 @@ extra_deps:
 ```
 
 - globパターン（`*`, `?` 等を含む値）はジェネレータがPythonの `glob.glob()` で展開
+- glob パターンが 0 件マッチの場合はエラー（`ConfigError`）。リテラルパスの不在は DVC が deps 不在として検出するが、glob は展開結果が空になるとジェネレータが何も出力せず DVC からは見えないため、依存欠落を静かに見逃さないよう生成時に検出する
 - ディレクトリ指定はDVCネイティブの挙動（中のファイル全体をハッシュ追跡）
 - dvc.yaml の deps のみに展開。params には含めない
 
@@ -271,7 +283,7 @@ output_hashes:
 
 ### フィールド仕様
 
-- **`run_id`**: この実行の一意識別子（タイムスタンプ + 短縮ハッシュ or UUID）
+- **`run_id`**: この実行の一意識別子。`<YYYYMMDDThhmmss>_<短縮ハッシュ>` 形式（例: `20250320T143000_a1b2c3`）。時系列ソート可能・人間可読・`git log -S <run_id>` での検索容易を満たす。短縮ハッシュは実行内容（params + input_hashes + 実行時刻）から導出する
 - **`executed_at`**: 実行日時（ISO-8601）
 - **`deps_runs`**: 依存ステージ名 → その時点の run_id。実行時に上流の run_meta.yaml から読み取って記録
 - **`params` / `inputs`**: 実行時のパラメータスナップショット。stage.yaml は「現在の定義」、run_meta は「実行時の実値」

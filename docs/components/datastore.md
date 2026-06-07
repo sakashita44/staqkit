@@ -39,15 +39,39 @@ DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走�
 
 ### 公開 API
 
-| 問い合わせ            | 返る情報                                                    | 利用者                        |
-| --------------------- | ----------------------------------------------------------- | ----------------------------- |
-| テーブル一覧          | テーブル名群                                                | DataStore 組み立て、CLI       |
-| テーブル名 → スキーマ | 該当 TableSchema                                            | DataStore、validate           |
-| カラム名 → 出現箇所   | テーブル名 + カラムの役割（PK/FK/通常）+ description + FK先 | CLI カラム検索                |
-| テーブル → FK 参照先  | (カラム, 参照先テーブル, 参照先カラム) の一覧               | DataStore バリデーション、CLI |
-| 全 FK 関係            | テーブル間の参照関係グラフ                                  | validate（FK 整合性）、CLI    |
+| メソッド              | 返る情報                                                 | 利用者                                        |
+| --------------------- | -------------------------------------------------------- | --------------------------------------------- |
+| `table_names()`       | 定義テーブル名の一覧                                     | DataStore 組み立て、`staqkit schema`          |
+| `get(table)`          | 該当 TableSchema（不在は `KeyError`）                    | DataStore、validate、`staqkit schema <table>` |
+| `find_column(column)` | カラムの全出現箇所（テーブル・役割・description・FK 先） | `staqkit column`                              |
+| `foreign_keys()`      | プロジェクト全体の FK 参照関係の一覧                     | validate（FK 整合性）、CLI                    |
 
-API シグネチャの詳細（戻り値の具体的な型）は CLI 体系再検討（[#10](https://github.com/sakashita44/staqkit/issues/10)）のあとで確定する。内部データ構造（FK 関係グラフの事前構築 vs 都度走査等）は実装時判断とする。
+「テーブルが持つ FK 参照先」は `get(table).foreign_keys`（TableSchema のフィールド）で得るため、TableSchemaSet 側に重複定義しない。
+
+```python
+@dataclass(frozen=True)
+class ForeignKeyRef:
+    table: str        # FK を持つテーブル
+    column: str       # FK カラム
+    ref_table: str    # 参照先テーブル
+    ref_column: str   # 参照先カラム
+
+@dataclass(frozen=True)
+class ColumnOccurrence:
+    table: str
+    column: str
+    is_primary_key: bool
+    foreign_key: ForeignKeyRef | None   # FK 参照先。FK でなければ None
+    description: str | None             # column_descriptions[column]。未記述は None
+
+class TableSchemaSet:
+    def table_names(self) -> list[str]: ...
+    def get(self, table: str) -> TableSchema: ...
+    def find_column(self, column: str) -> list[ColumnOccurrence]: ...
+    def foreign_keys(self) -> list[ForeignKeyRef]: ...
+```
+
+カラムの役割は `is_primary_key`（bool）と `foreign_key`（`ForeignKeyRef | None`）という直交する2フィールドで表す。PK と FK は SQL 上で独立した軸であり、`timeseries.dkey`（複合 PK の一部であり同時に `dtype` への FK）のような「PK かつ FK」を、単一の役割 enum に潰さず表現できる。2フィールドの取り得る4通り（PK のみ・FK のみ・両方・どちらでもない）はすべて正当な状態であり、不正な組み合わせは存在しない。1カラムの FK 参照先は識別軸モデル上一意なため `foreign_key` は単数で持つ。内部データ構造（FK 関係グラフの事前構築 vs 都度走査等）は実装時判断とする。
 
 ### TableSchema のフィールド
 
@@ -363,6 +387,10 @@ validation:
 - `constraint`: カラム名・型 + 全制約検証。PK 重複・FK は既存 VIEW に対する JOIN で検証
 
 FK 検証は読み取りスコープに依存する。write_table の FK 検証は、参照先テーブルがそのステージの読み取りスコープ（inputs 由来の上流閉包）に VIEW として存在する場合にのみ実行できる。したがって FK で参照するテーブルを生成する上流ステージは inputs に含めることを要件とする。inputs に含めず参照先がスコープ外となる場合、その FK は write 時に検証されない既知の限界として扱い、リポジトリ全体を横断する `staqkit validate` の FK 整合性検査で補完する。
+
+検証は read-only の `fetch` の表現力だけで閉じる。書き込み候補データの FK 値を `VALUES` 句／`params` でインライン化し、参照先 VIEW への anti-join（候補側にあって参照先にない値を拾う `LEFT JOIN ... WHERE 参照先キー IS NULL` 相当）で違反行を検出する。候補フレームを VIEW として登録する経路は不要であり、利用者が持つ QueryEngine が read-only で register を持たない（[エンジンの二相](#エンジンの二相-enginebuilder-と-queryengine)）という不変条件と整合する。
+
+参照先 VIEW の有無で挙動が分岐する。参照先がスコープに未登録なら検証自体をスキップする（前述の既知の限界）。登録済みなら anti-join を実行し、参照先が0行で候補値がどれも一致しない場合は全候補行が違反として `ConstraintViolationError` となる。「VIEW 不在＝スキップ」と「VIEW 存在かつ不一致＝違反」は別であり、上流 planned でデータ未配置のケース（VIEW 不在＝スキップ側）と混同しない。
 
 書き込み時に `schema`（カラム名・型のみ、制約スキップ）レベルは提供しない。write_table はステージ出力の最終ゲートであり、制約違反を含むデータが DataStore に混入すると下流全体に波及する。開発中の高速イテレーションでは `off` で検証自体を無効化する。
 
