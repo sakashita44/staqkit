@@ -145,7 +145,7 @@ staqkit catalog > docs/dtype_catalog.md
 staqkit history <stage>
 ```
 
-指定ステージの過去の run_meta 一覧を表示する。内部的には `git log` をラップする。
+指定ステージの過去実行（params・入出力ハッシュの変遷）を表示する。`dvc.lock` の当該ステージ部分を git 履歴上で辿る（`git log` をラップ）。
 
 ### staqkit provenance
 
@@ -153,4 +153,4 @@ staqkit history <stage>
 staqkit provenance <stage>
 ```
 
-指定ステージのプロヴェナンスチェーン（deps_runs を再帰的に辿った実行系譜）を表示する。
+指定ステージのプロヴェナンスチェーン（実行系譜）を表示する。`dvc.lock` の dep ハッシュを起点に、それを確立した上流 commit を `git log -S <hash> -- dvc.lock` で再帰的に辿って導出する。独自の履歴 DB は持たない（[stage.md](stage.md#来歴チェーンの辿り方)）。

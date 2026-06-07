@@ -2,6 +2,8 @@
 
 dvc.yaml は `stages/*/stage.yaml` 群から動的に生成される派生物であり、Git管理しない。`dvc.lock` のみGit管理。ルートに単一の dvc.yaml を生成する。
 
+`dvc.lock` は各ステージの実行時パラメータ・入出力ハッシュを commit 単位で記録するため、来歴追跡（T1）の源泉も兼ねる。`staqkit provenance` / `staqkit history` は `dvc.lock` と git 履歴からチェーンを導出する（[stage.md](stage.md#来歴の所在)）。
+
 ## CLIラッパー
 
 パイプライン関連の主要コマンド。全コマンドの詳細は [CLI リファレンス](cli.md) を参照。

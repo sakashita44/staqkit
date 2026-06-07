@@ -144,11 +144,11 @@ staqkit が後方互換を守る対象は段階づけられる。強制ではな
 
 staqkit 内の状態は一方向の導出関係に従う。stage.yaml の status がSSoTであり、dvc.yaml は stage.yaml から生成される派生物、実行時の鮮度（dvc status）はさらにその導出である。下流が上流を変更することはない。
 
-| 問い                                       | 回答の源泉                            | 性質                   |
-| ------------------------------------------ | ------------------------------------- | ---------------------- |
-| このステージはパイプラインに含まれるか     | stage.yaml status + inactive伝搬      | 設計時（人間が宣言）   |
-| このステージの出力は最新か                 | dvc status（deps/outsのハッシュ比較） | 実行時（ツールが導出） |
-| このステージは何のパラメータで実行されたか | run_meta.yaml                         | 実行時（自動記録）     |
+| 問い                                       | 回答の源泉                            | 性質                               |
+| ------------------------------------------ | ------------------------------------- | ---------------------------------- |
+| このステージはパイプラインに含まれるか     | stage.yaml status + inactive伝搬      | 設計時（人間が宣言）               |
+| このステージの出力は最新か                 | dvc status（deps/outsのハッシュ比較） | 実行時（ツールが導出）             |
+| このステージは何のパラメータで実行されたか | dvc.lock（params）+ git 履歴          | 実行時（DVC が commit 単位で記録） |
 
 ### パイプライン定義の扱い
 
@@ -156,7 +156,7 @@ dvc.yaml は stage.yaml から常に導出可能なため、Git管理対象外�
 
 ### 実験追跡
 
-DVC Experimentsは現時点では採用しない。run_meta.yaml が提供するプロヴェナンスチェーン・出力データ型一覧・行数情報はDVC Experimentsでは代替できず、関心の層が異なる。dvc.yaml非Git管理方針との整合性からも現時点では利用不可。後から追加可能な設計を維持する。
+DVC Experimentsは現時点では採用しない。来歴追跡（`dvc.lock` + git 履歴からの導出）とは関心の層が異なり、dvc.yaml 非Git管理方針との整合性からも現時点では利用不可。後から追加可能な設計を維持する。
 
 ### バリデーション
 
@@ -164,12 +164,12 @@ DVC Experimentsは現時点では採用しない。run_meta.yaml が提供する
 
 - **DataFrame スキーマ検証**: DDL パース（sqlglot）+ QueryEngine による検証クエリ。DDL が制約定義の SSoT であり、CHECK 式に DuckDB 固有関数を許容するため、同一エンジンで検査する
 - **YAML 設定バリデーション**: Pydantic（stage.yaml, table_schemas/\*.yaml の外形検証）
-- **データクラスバリデーション**: Pydantic dataclasses（StageDefinition, RunMeta 等）
+- **データクラスバリデーション**: Pydantic dataclasses（StageDefinition, TableSchema 等）
 - **DAG 構築・循環検出**: networkx
 
 ### エラーハンドリング
 
-staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の性質で4系統に分ける。系統は[アクセス経路の保証グラデーション](#守る契約とアクセス経路の保証グラデーション)と対応し、利用者・CLI は系統単位で捕捉できる。本階層は実行を止める例外の分類であり、検査が報告する警告（`column_descriptions` 未記述、active が planned を参照する等）は例外を投げず[人間向けエラー報告](#人間向けエラー報告)の警告チャネルで扱う。パラメータ整合（stage.yaml の params と run_meta の乖離）はどの系統にも割り当てない。params 編集による鮮度低下は params を決定的に追跡する `dvc status`（[状態モデル](#状態モデル)）が担い、自動生成記録である run_meta と stage.yaml の整合は、可変な git 管理ファイル間に validate の特権的な基準を置けないため git の差分・レビュー・履歴に委ねる。公開・引き継ぎ前にさらに固めたい場合は、可変な設定ファイルどうしを照合する validate ではなく、データ実体ハッシュ・跨ステージのハッシュ連鎖・git 履歴という独立した基準に照らす来歴監査（provenance 系、[#17](https://github.com/sakashita44/staqkit/issues/17)）が適所となる。
+staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の性質で4系統に分ける。系統は[アクセス経路の保証グラデーション](#守る契約とアクセス経路の保証グラデーション)と対応し、利用者・CLI は系統単位で捕捉できる。本階層は実行を止める例外の分類であり、検査が報告する警告（`column_descriptions` 未記述、active が planned を参照する等）は例外を投げず[人間向けエラー報告](#人間向けエラー報告)の警告チャネルで扱う。パラメータ整合（stage.yaml の params と実行時実値の乖離）はどの系統にも割り当てない。params 編集による鮮度低下は、params を決定的に追跡する `dvc status`（[状態モデル](#状態モデル)）が担う。来歴（実行時パラメータ・入出力ハッシュ・実行系譜）は `dvc.lock` + git 履歴を源泉とし、独立した実行記録ファイルを持たないため、記録と実体が乖離して検証を要する事態自体が生じない（[stage.md](components/stage.md#専用の実行記録を持たない理由)）。
 
 | 系統                  | 何の失敗か                                          | 主な発生源                              |
 | --------------------- | --------------------------------------------------- | --------------------------------------- |
@@ -232,7 +232,7 @@ stages/
 
 | 要求                | 実現手段                                                                                 |
 | ------------------- | ---------------------------------------------------------------------------------------- |
-| T1 来歴到達性       | run_meta.yaml（実行事実の記録）+ プロヴェナンスチェーン                                  |
+| T1 来歴到達性       | git 管理 `dvc.lock`（params・ハッシュ）+ git 履歴からの来歴チェーン導出                  |
 | U1 意味的同一性     | 識別軸属性（DDL の PK）の組み合わせによる一意特定                                        |
 | U2 多軸クエリ面     | DataStore クラス（唯一の読み取り口）の query() + fetch()                                 |
 | U3 カタログ         | スキーマ構造の出力（schema / column）+ 参照テーブルの目録出力（catalog）+ DAG マップ生成 |
@@ -262,19 +262,19 @@ stages/
 
 ## 情報所在マップ
 
-| 情報                     | SSoT                                      | 格納先                                                           |
-| ------------------------ | ----------------------------------------- | ---------------------------------------------------------------- |
-| DAG構造                  | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                      |
-| パラメータ               | stages/xxx/stage.yaml                     | params セクション                                                |
-| inputs（依存先ステージ） | stages/xxx/stage.yaml                     | inputs セクション（source_stage のみ）                           |
-| description（1行）       | stages/xxx/stage.yaml                     | desc フィールド                                                  |
-| description（詳細）      | stages/xxx/README.md                      | アルゴリズム説明                                                 |
-| planned 状態             | stages/xxx/stage.yaml                     | status フィールド + data/ の有無                                 |
-| 出力宣言（outs）         | stages/xxx/stage.yaml                     | outs セクション                                                  |
-| 実行メタ（run_meta）     | stages/xxx/run_meta.yaml                  | Git管理。run_id・deps_runs・パラメータスナップショット・ハッシュ |
-| 外部依存（extra_deps）   | stages/xxx/stage.yaml                     | extra_deps セクション                                            |
-| 処理コード               | stages/xxx/run.py                         | エントリポイント                                                 |
-| テーブルカタログ         | `staqkit catalog` の stdout 出力          | 対象テーブルは table_schemas の `catalog: true` で指定           |
+| 情報                           | SSoT                                      | 格納先                                                                      |
+| ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
+| DAG構造                        | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                                 |
+| パラメータ                     | stages/xxx/stage.yaml                     | params セクション                                                           |
+| inputs（依存先ステージ）       | stages/xxx/stage.yaml                     | inputs セクション（source_stage のみ）                                      |
+| description（1行）             | stages/xxx/stage.yaml                     | desc フィールド                                                             |
+| description（詳細）            | stages/xxx/README.md                      | アルゴリズム説明                                                            |
+| planned 状態                   | stages/xxx/stage.yaml                     | status フィールド + data/ の有無                                            |
+| 出力宣言（outs）               | stages/xxx/stage.yaml                     | outs セクション                                                             |
+| 来歴（params・ハッシュ・系譜） | dvc.lock + git 履歴                       | Git管理の dvc.lock（stage.yaml から生成）を源泉に provenance/history が導出 |
+| 外部依存（extra_deps）         | stages/xxx/stage.yaml                     | extra_deps セクション                                                       |
+| 処理コード                     | stages/xxx/run.py                         | エントリポイント                                                            |
+| テーブルカタログ               | `staqkit catalog` の stdout 出力          | 対象テーブルは table_schemas の `catalog: true` で指定                      |
 
 ## 未解決事項
 

@@ -18,7 +18,6 @@ stages/                      ← Git管理（定義側）。再帰走査
     raw_motion/              ← ステージ "import/raw_motion"
       run.py                 ← エントリポイント
       stage.yaml             ← params + inputs + desc
-      run_meta.yaml          ← Git管理（実行記録）
       README.md              ← アルゴリズム説明
     raw_force/
       run.py
