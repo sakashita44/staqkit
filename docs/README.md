@@ -21,6 +21,6 @@ uv run pyright               # 型チェック
 コンポーネント詳細設計:
 
 - [DataStore](components/datastore.md) — 識別軸定義・クエリAPI・バリデーション
-- [ステージ](components/stage.md) — stage.yaml仕様・状態管理・run_meta・dtype
+- [ステージ](components/stage.md) — stage.yaml仕様・状態管理・実行モデル・dtype
 - [パイプライン生成](components/pipeline-gen.md) — dvc.yaml導出・バリデーション
 - [外部データ](components/external-data.md) — DAG間合成・dvc import

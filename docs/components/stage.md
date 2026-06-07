@@ -248,80 +248,30 @@ data/stages/normalize/timeseries.parquet    ← normalize ステージが出力
 - 上流ステージの出力は DVC の `deps:` に含めてよい（循環しないため）
 - テーブルの統合は DataStore が読み取り時に行う（UNION ALL）
 
-## run_meta.yaml（実行記録）
+## 来歴の所在
 
-ステージ実行時に自動生成される自己完結型の実行記録。**Git管理**（`stages/` 配下に配置。dvc.yaml の outs/deps からは除外）。
+来歴（T1 来歴到達性: あるデータがいつ・どのパラメータで・どの上流実行から生成されたか）は、専用の実行記録ファイルを持たず、git 管理された `dvc.lock` と git 履歴から導出する。staqkit はステージ実行時に独自の来歴記録を書き出さない。
 
-```yaml
-# stages/normalize/run_meta.yaml
-run_id: "20250320T143000_a1b2c3"
-executed_at: "2025-03-20T14:30:00+09:00"
+`dvc.lock` は各ステージについて、実行時に使われた params の実値・deps と outs のファイルハッシュ・cmd を記録し、commit 単位で git に永続する。したがって「どのパラメータで生成されたか」（params）と「どのデータから生成されたか」（dep ハッシュ）は、過去の任意の commit について `dvc.lock` を読めば判明する。実行時刻は当該 commit の時刻、実行の識別子は commit hash が担う。
 
-# プロヴェナンス（依存ステージの実行ID）
-deps_runs:
-    import: "20250319T100000_d4e5f6"
-    compute_cog_velocity: "20250320T120000_g7h8i9"
+### 来歴チェーンの辿り方
 
-# 実行時パラメータスナップショット
-params:
-    cog_pgt_threshold: 50
-    cog_vel_thresholds: [100, 70, 50, 30, 0]
-inputs:
-    - source_stage: compute_cog_velocity
+「ある出力が、どの上流の実行から生成されたか」は、`dvc.lock` のハッシュを git 履歴上で辿って特定する。あるステージの dep ハッシュ `h` を起点に、上流ステージの出力ハッシュが `h` を確立した最新 commit を `git log -S <h> -- dvc.lock` で探すと、その commit が上流の実行イベントに対応する。これを dep ハッシュに沿って再帰すれば実行系譜が得られる。`dvc.lock` の読み取りは DAG の順方向であり循環は生じない。
 
-# 実行結果サマリ
-row_counts:
-    timeseries: 128000
+ハッシュは実データのバイト列を指すため、非決定的なステージ（再実行で出力が変わる）でも、下流が実際に消費した出力インスタンスを一意に指す。同一ハッシュは同一データであり、来歴上は等価とみなす。
 
-# データハッシュ（実行事実の記録）
-input_hashes:
-    data/stages/import/timeseries.parquet: "md5:abc123..."
-output_hashes:
-    data/stages/normalize/timeseries.parquet: "md5:mno345..."
-    data/stages/normalize/run_meta.yaml: null # 自身は除外（循環回避）
-```
+### 専用の実行記録を持たない理由
 
-### フィールド仕様
+実行時パラメータ・入出力ハッシュは `dvc.lock` が既に git 永続で記録するため、別途 staqkit 固有の実行記録を持つと情報が二重化する。さらに、git 管理された独立アーティファクトは `dvc.lock` の整合性機構（`dvc status` / `dvc checkout` による実体との突合）の外にあり、手編集やマージ事故で実体と乖離しても検知されず、来歴記録だけが恒久的に嘘をつきうる。来歴を `dvc.lock` + git からの導出に一本化することで、この乖離が原理的に生じない（嘘をつける独立記録が存在しない）。
 
-- **`run_id`**: この実行の一意識別子。`<YYYYMMDDThhmmss>_<短縮サフィックス>` 形式（例: `20250320T143000_a1b2c3`）。時系列ソート可能・人間可読・`git log -S <run_id>` での検索容易を満たす。短縮サフィックスは同一秒内の衝突を避けるためのランダム値（生成時の乱数を数桁に短縮）であり、実行内容から導出する決定的ハッシュではない。run_meta は run_id・executed_at を含む非決定的な実行記録であり、来歴の同一性照合は実行内容由来の `deps_runs` / `input_hashes` が担う
-- **`executed_at`**: 実行日時（ISO-8601）
-- **`deps_runs`**: 依存ステージ名 → その時点の run_id。実行時に上流の run_meta.yaml から読み取って記録
-- **`params` / `inputs`**: 実行時のパラメータスナップショット。stage.yaml は「現在の定義」、run_meta は「実行時の実値」
-- **`row_counts`**: テーブルごとの出力行数
-- **`input_hashes` / `output_hashes`**: 実行時に自前でmd5を計算。dvc.lockとは独立した実行事実の記録
-
-### Git管理の利点
-
-- `dvc repro` の影響を受けない（実行記録が再実行で上書きされてもGit履歴に残る）
-- run_idベースの時系列追跡が `git log -S <run_id>` で可能
-- commit単位でrun_metaの変遷を追える
-
-### dvc.lock との役割分離
-
-- **dvc.lock**: 「各ファイルの現在期待されるハッシュは何か」 — 宣言的（現在の期待状態）
-- **run_meta**: 「このステージはいつ・何で・どう実行されたか」 — 事実的（実行時の記録）
-
-### データ実体との独立性
-
-run_meta は実行事実の記録であり、データ実体への依存を持たない。データ実体が消えていても（DVC キャッシュクリーンアップ、DVC remote アクセス不可、過去 commit の参照等）、git に残った run_meta から「いつ・何のパラメータで・どの上流実行から生成されたか」を完全に追跡できる。
-
-dvc.lock がデータ実体への参照（ファイルハッシュ）であるのに対し、run_meta は実行事実の独立記録として機能する。両者は補完関係にあり、
-
-- データ実体の整合性確認 → dvc.lock
-- 来歴・パラメータ・行数の追跡 → run_meta
-
-外部から `staqkit import` で取り込んだデータについても、出典元リポジトリを clone すれば run_meta が取得でき、DVC remote へのアクセスなしに git のみで来歴文書として参照可能。
-
-### プロヴェナンスチェーン
-
-`deps_runs` により実行系譜を再帰的に辿れる。上流の run_meta.yaml を読むのはDAGの順方向であり、循環は生じない。
+行数のような `dvc.lock` に無い実行サマリは記録せず、必要なときにデータ実体から再計算する。データ実体への独立性（実体が消えても来歴を読める）は、`dvc.lock` 自体が git テキストとして残るため成立する。外部から `staqkit import` で取り込んだデータの来歴は、出典元リポジトリを clone し、clone 先で同じ導出を行う（[external-data.md](external-data.md#上流dag理解)、[usecases.md](../usecases.md) C2a）。
 
 ### CLIラッパー
 
-- `staqkit history <stage>`: 過去の run_meta 一覧表示
-- `staqkit provenance <stage>`: プロヴェナンスチェーン表示
+- `staqkit history <stage>`: 当該ステージの `dvc.lock` の変遷（params・ハッシュの履歴）を git log 上で一覧表示
+- `staqkit provenance <stage>`: 上記のハッシュ追跡で導出した実行系譜（来歴チェーン）を表示
 
-内部的には `git log` をラップするだけで、独自の履歴DBは持たない。
+いずれも `dvc.lock` と git をラップするだけで、独自の履歴 DB は持たない。
 
 ## description 3層構造
 
@@ -351,7 +301,6 @@ README に書かないもの（他所がSSoT）: パラメータ値（→ stage.
 
 - **StageDefinition**: stage.yaml の型付き表現（StageInfo の構築元）
 - **OutsEntry**: outs の各エントリの型付き表現（[outs 統一スキーマ](#outs-統一スキーマ)）
-- **RunMeta**: 実行記録（run_stage のエピローグで生成）
 - **TableSchema**: テーブル定義（カラム・型・制約・カタログ出力設定）
 
 StageDefinition は stage.yaml をパースした frozen dataclass であり、次のフィールドを持つ。ステージ走査（`discover_stages`）が `list[StageDefinition]` を返し、グラフ操作（パイプライン生成・参照整合性検査）はパス解決を伴わない本表現を用いる。
