@@ -388,7 +388,7 @@ validation:
 
 FK 検証は読み取りスコープに依存する。write_table の FK 検証は、参照先テーブルがそのステージの読み取りスコープ（inputs 由来の上流閉包）に VIEW として存在する場合にのみ実行できる。したがって FK で参照するテーブルを生成する上流ステージは inputs に含めることを要件とする。inputs に含めず参照先がスコープ外となる場合、その FK は write 時に検証されない既知の限界として扱い、リポジトリ全体を横断する `staqkit validate` の FK 整合性検査で補完する。
 
-検証は read-only の `fetch` の表現力だけで閉じる。書き込み候補データの FK 値を `VALUES` 句／`params` でインライン化し、参照先 VIEW への anti-join（候補側にあって参照先にない値を拾う `LEFT JOIN ... WHERE 参照先キー IS NULL` 相当）で違反行を検出する。候補フレームを VIEW として登録する経路は不要であり、利用者が持つ QueryEngine が read-only で register を持たない（[エンジンの二相](#エンジンの二相-enginebuilder-と-queryengine)）という不変条件と整合する。
+検証は read-only の `fetch` の表現力だけで閉じる。書き込み候補データの FK 値を `VALUES` 句／`params` でインライン化し、参照先 VIEW への anti-join（候補側にあって参照先にない値を拾う `LEFT JOIN ... WHERE 参照先キー IS NULL` 相当）で違反行を検出する。候補フレームを VIEW として登録する経路は不要であり、利用者が持つ QueryEngine が read-only で register を持たない（[エンジンの二相](#エンジンの二相-enginebuilder-と-queryengine)）という不変条件と整合する。anti-join では候補側 FK 値が NULL の行を対象から除外する。SQL 標準の FK は NULL を違反としない（参照は「値があるなら参照先に存在せよ」の制約）ため、NULL を含めると anti-join がそれらを誤検出してしまう。NULL を許さない FK は NOT NULL 制約検査が別途捕捉するため、この除外で検証に穴は空かない。
 
 参照先 VIEW の有無で挙動が分岐する。参照先がスコープに未登録なら検証自体をスキップする（前述の既知の限界）。登録済みなら anti-join を実行し、参照先が0行で候補値がどれも一致しない場合は全候補行が違反として `ConstraintViolationError` となる。「VIEW 不在＝スキップ」と「VIEW 存在かつ不一致＝違反」は別であり、上流 planned でデータ未配置のケース（VIEW 不在＝スキップ側）と混同しない。
 

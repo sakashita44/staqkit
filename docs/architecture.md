@@ -194,7 +194,7 @@ staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の�
     - `WriteError`: read-only インスタンスへの write、自ステージ outs 外への write
 - `StageExecutionError`: post-run 検証で未生成ファイル（declared − actual）を検出した場合等
 
-層配置は依存方向（Project → Core）に従う。基底 `StaqkitError` と系統基底 `ConfigError` / `ValidationError` / `AccessError` は Core 層に置く。`StageExecutionError` は run_stage（Project）だけが送出するため Project 層に置く。具体型は送出箇所の層に置き、対応する系統基底を継承する（`SchemaDefinitionError`・`ValidationError` 系・`ScopeError` は Core、`StageDefinitionError`・`ReferenceIntegrityError`・`WriteError` は Project）。Project の具体型が Core の系統基底を継承するのは依存方向に沿う。系統基底（性質の分類）と送出層（実装上の所在）は独立であり、たとえば `ConfigError` は Core に置くが具体型 `StageDefinitionError` は Project が送出する。利用者が捕捉する公開面は `staqkit.errors` に re-export する。
+層配置は依存方向（Project → Core）に従う。基底 `StaqkitError` と系統基底 `ConfigError` / `ValidationError` / `AccessError` は Core 層に置く。`StageExecutionError` は run_stage（Project）だけが送出するため Project 層に置く。具体型は送出箇所の層に置き、対応する系統基底を継承する。ただし複数の層から送出される具体型は、すべての送出元が参照できるよう最下層（Core）に置く。これにより `SchemaDefinitionError`・`ValidationError` 系・`ScopeError`・`ReferenceIntegrityError` は Core、`StageDefinitionError`・`WriteError` は Project となる。`ReferenceIntegrityError` は DAG 循環・FK 参照先不在を Core（DAGBuilder / TableSchemaSet）が、source_stage 不在・active が planned を参照・外部取り込みポインタの構造的不整合を Project（Discovery / Generator）が送出する両層またがりの型のため、双方から参照できる Core 側に置く。Project の具体型が Core の系統基底を継承するのは依存方向に沿う。系統基底（性質の分類）と送出層（実装上の所在）は独立であり、たとえば `ConfigError` は Core に置くが具体型 `StageDefinitionError` は Project が送出する。利用者が捕捉する公開面は `staqkit.errors` に re-export する。
 
 #### 人間向けエラー報告
 

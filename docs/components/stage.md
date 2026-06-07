@@ -283,7 +283,7 @@ output_hashes:
 
 ### フィールド仕様
 
-- **`run_id`**: この実行の一意識別子。`<YYYYMMDDThhmmss>_<短縮ハッシュ>` 形式（例: `20250320T143000_a1b2c3`）。時系列ソート可能・人間可読・`git log -S <run_id>` での検索容易を満たす。短縮ハッシュは実行内容（params + input_hashes + 実行時刻）から導出する
+- **`run_id`**: この実行の一意識別子。`<YYYYMMDDThhmmss>_<短縮サフィックス>` 形式（例: `20250320T143000_a1b2c3`）。時系列ソート可能・人間可読・`git log -S <run_id>` での検索容易を満たす。短縮サフィックスは同一秒内の衝突を避けるためのランダム値（生成時の乱数を数桁に短縮）であり、実行内容から導出する決定的ハッシュではない。run_meta は run_id・executed_at を含む非決定的な実行記録であり、来歴の同一性照合は実行内容由来の `deps_runs` / `input_hashes` が担う
 - **`executed_at`**: 実行日時（ISO-8601）
 - **`deps_runs`**: 依存ステージ名 → その時点の run_id。実行時に上流の run_meta.yaml から読み取って記録
 - **`params` / `inputs`**: 実行時のパラメータスナップショット。stage.yaml は「現在の定義」、run_meta は「実行時の実値」
