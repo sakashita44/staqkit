@@ -10,7 +10,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - [docs/requirements.md](docs/requirements.md) — 要求定義（設計ファースト + 信頼・理解・独立の三柱）
 - [docs/usecases.md](docs/usecases.md) — ユースケース・シナリオ体系（CLI/Library/Git+DVC/Pattern の振り分け、未仕様ポイント一覧）
-- [docs/idea.md](docs/idea.md) — 横断的観点・設計論点の雑記帳（決定事項ではない作業中メモ）
 - [docs/architecture.md](docs/architecture.md) — アーキテクチャ（正体・層構造・設計方針・差し替え性・要求マッピング）
 - [docs/distribution.md](docs/distribution.md) — 位置づけと配布（正体・パッケージ配布・Copier 雛形伝播）
 - [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
