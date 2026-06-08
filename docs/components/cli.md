@@ -33,10 +33,16 @@ stage.yaml から直接 DAG を生成して可視化する。dvc.yaml の生成�
 ### staqkit add-stage
 
 ```bash
-staqkit add-stage <path> [--status <active|planned|inactive>]
+staqkit add-stage <path> [--status <active|planned|inactive>] [--template <default|ingest>]
 ```
 
-新しいステージのディレクトリ（`stages/<path>/`）に stage.yaml と run.py のボイラープレートを生成する。`--status` で初期状態を指定する（既定: planned）。プロジェクト全体の初期化は Copier が担い、本コマンドは既存プロジェクト内へのステージ追加に専念する（[distribution.md](../distribution.md#初期化とステージ追加の責務分担)）。コマンドの詳細仕様（add 系の拡張要否・登録ステージ用テンプレート等）は [#7](https://github.com/sakashita44/staqkit/issues/7) で策定中。
+新しいステージのディレクトリ（`stages/<path>/`）に stage.yaml と run.py のボイラープレートを生成する。プロジェクト全体の初期化は Copier が担い、本コマンドは既存プロジェクト内へのステージ追加に専念する（[distribution.md](../distribution.md#初期化とステージ追加の責務分担)）。
+
+- `--status`: 初期状態（既定: planned。設計ファースト＝実体に先立つ宣言と整合）。
+- `--template`: run.py 雛形の種別。`default` は通常ステージ（`store.query` → 加工 → `store.write_table`）、`ingest` は生データ・外部 import データをソースとして取り込む取り込みステージ（`extra_deps` でソースを受け、非 Parquet 出力は `add_datastore: false`、パスを格納した sidecar parquet で DataStore から発見可能にする。[external-data.md](external-data.md)、[#6](https://github.com/sakashita44/staqkit/issues/6)）。
+- 既存ステージ（同一パス）と重複する場合はエラー終了する。
+
+テンプレートはパッケージに同梱し、バージョン更新で改善が伝播する（プロジェクト側に焼かない。[distribution.md](../distribution.md#雛形と改善の伝播)）。`add-table` 等の他の add 系コマンドは設けない（table schema は単一 YAML で `staqkit schema` により内省でき scaffold 価値が低く、CLI の契約面を不要に増やさないため）。実装時の詳細は [#7](https://github.com/sakashita44/staqkit/issues/7) で追跡する。
 
 ## バリデーション
 
