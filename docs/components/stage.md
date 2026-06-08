@@ -159,7 +159,7 @@ source_stage の指定漏れは「データの不在」ではなく「データ�
 extra_deps:
     raw_data: data/raw/motion # ディレクトリ指定
     calibration: data/raw/calibration.csv # ファイル指定
-    lib_utils: lib/signal_utils.py # 共有スクリプト
+    lib_utils: libs/signal_utils.py # 共有スクリプト
     upstream_b: data/external/labA/extract/b.parquet # 外部 import データ（ソース扱い）
 ```
 

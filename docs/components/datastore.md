@@ -465,3 +465,5 @@ Protocol は VIEW ベースを前提とする。TABLE 対応は将来のパフ�
 ### 非 Parquet データの発見
 
 バイナリファイル（ML モデル等）を DataStore 経由で発見可能にするパターン: パスを格納した Parquet（`add_datastore: true`）+ バイナリ本体（`add_datastore: false`）。DataStore で「どのモデルがどこにあるか」を検索し、実体はパスで直接アクセス。
+
+外部ツール出力（モーションキャプチャの trc/tsv、c3d→csv 等、[#6](https://github.com/sakashita44/staqkit/issues/6)）も同じパターンで扱う。実体ファイルを `add_datastore: false` の out として宣言し、パスを格納した sidecar parquet（`add_datastore: true`）を併設して DataStore から発見可能にする。取り込みステージ（`staqkit add-stage --template ingest`）の雛形がこの構成を生成する。

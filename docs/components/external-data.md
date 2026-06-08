@@ -12,6 +12,7 @@
 
 取り込んだデータは DataStore へ直接は載せず、生データ（`data/raw/`）と同じく**ソース**として扱う。下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#extra_deps-dag外の外部依存)）。
 
+- 取り込みステージは `extra_deps` のソースを読み、run.py で `data/stages/<stage>/` 配下（＝当該ステージの outs）へ書き出す。非 Parquet 出力をそのまま管理下に置く場合は `run.py` で `shutil.copy` し、コピー先を `add_datastore: false` の out として宣言、パスを格納した sidecar parquet（`add_datastore: true`）を併設すると DataStore から発見できる。加工して Parquet 化する場合は `store.write_table` で `add_datastore: true` の out を書く。`staqkit add-stage --template ingest` がこの定型を生成する。
 - DataStore に入るデータは必ずそのプロジェクト自身がスキーマ契約を宣言する。これは生データ取り込みと同一の原則であり、外部だけの特例ではない。上流の公開スキーマ（標準構造そのものが外部 IF）はステージ著者が定義を書くときに参照する。
 - 上流データの意味確定に別テーブルが必要な場合は、そのテーブルの parquet も import する。「スキーマを必ず import する」というルールではなく、生データを複数ファイル読むのと同じ必要駆動の取り込みである。
 - これにより子リポジトリは自身のスキーマで自己完結し、外部スキーマを転送・解釈する専用の仕組みを持たない。
