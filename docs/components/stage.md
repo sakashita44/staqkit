@@ -286,7 +286,7 @@ data/stages/normalize/timeseries.parquet    ← normalize ステージが出力
 
 実行時パラメータ・入出力ハッシュは `dvc.lock` が既に git 永続で記録するため、別途 staqkit 固有の実行記録を持つと情報が二重化する。さらに、git 管理された独立アーティファクトは `dvc.lock` の整合性機構（`dvc status` / `dvc checkout` による実体との突合）の外にあり、手編集やマージ事故で実体と乖離しても検知されず、来歴記録だけが恒久的に嘘をつきうる。来歴を `dvc.lock` + git からの導出に一本化することで、この乖離が原理的に生じない（嘘をつける独立記録が存在しない）。
 
-行数のような `dvc.lock` に無い実行サマリは記録せず、必要なときにデータ実体から再計算する。データ実体への独立性（実体が消えても来歴を読める）は、`dvc.lock` 自体が git テキストとして残るため成立する。外部から `staqkit import` で取り込んだデータの来歴は、出典元リポジトリを clone し、clone 先で同じ導出を行う（[external-data.md](external-data.md#上流dag理解)、[usecases.md](../usecases.md) C2a）。
+行数のような `dvc.lock` に無い実行サマリは記録せず、必要なときにデータ実体から再計算する。データ実体への独立性（実体が消えても来歴を読める）は、`dvc.lock` 自体が git テキストとして残るため成立する。外部から `staqkit import` で取り込んだデータの来歴は、出典元リポジトリを clone し、clone 先で同じ導出を行う（[external-data.md](external-data.md#追跡性)、[usecases.md](../usecases.md) C2a）。
 
 ### CLIラッパー
 

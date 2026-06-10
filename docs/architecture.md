@@ -189,7 +189,7 @@ staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の�
 - `ConfigError`
     - `SchemaDefinitionError`: DDL パース失敗、table_schema YAML 単体の外形違反（`column_descriptions` が DDL 不在カラムを参照する等）
     - `StageDefinitionError`: stage.yaml の外形違反、outs key 重複、add_datastore クロス検証違反
-    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。source_stage 不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#上流dag理解)）
+    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。source_stage 不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#追跡性)）
 - `ValidationError`
     - `SchemaMismatchError`: カラム名・型不一致、ステージ間 UNION ALL 非互換
     - `ConstraintViolationError`: NOT NULL / PK / UNIQUE / CHECK / FK 違反
