@@ -28,6 +28,10 @@ stages/                      ← Git管理（定義側）。再帰走査
     stage.yaml
     README.md
 
+libs/                        ← Git管理（共有コード）。複数ステージから参照
+  signal_utils.py
+  sim-model/                 ← submodule（外部リポジトリのコード/データ）
+
 data/                        ← DVC管理（成果物側）
   raw/                       ← ソースデータ（ステージ生成物ではない）
     motion/                  ← 計測機器からの生データ等
@@ -74,3 +78,10 @@ data/                        ← DVC管理（成果物側）
 - **data/ ミラー**: `data/stages/import/raw_motion/timeseries.parquet`（stages/ 以下をそのまま反映）
 - **参照形式**: `source_stage: import/raw_motion`（パス形式）
 - **発見**: `stages/**/stage.yaml` を再帰走査。フラットとネストが共存可能
+
+## libs（共有コード）
+
+複数ステージから参照する共有コード（ユーティリティ、シミュレーションモデル等）を置く。Git 管理。
+
+- ステージは `extra_deps` で `libs/...` を宣言して依存追跡する（[stage.md](components/stage.md#extra_deps-dag外の外部依存)）。変更は DVC が下流を無効化する。
+- 外部リポジトリで管理するコード/データは git submodule として `libs/<name>/` に配置できる。submodule コミットの更新が `extra_deps` 経由で DVC の変更検知に連動する。submodule を「生きたコード・データの共有」に使うのは、雛形コピー用途（不採用）とは別の用途であり distribution.md と整合する（[distribution.md](distribution.md#雛形と改善の伝播)）。

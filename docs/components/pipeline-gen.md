@@ -19,14 +19,14 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 
 ## 導出マッピング
 
-| dvc.yaml フィールド | 導出元                                                                                                                                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| stage 名            | stages/ からの相対ディレクトリパス                                                                                                                                                                                        |
-| cmd                 | `python stages/{name}/run.py`                                                                                                                                                                                             |
-| deps                | ① `stages/{name}/run.py`（自身のコード）② 上流ステージの全 outs ファイル（inputs の source_stage から展開）③ `config/table_schemas/{table}.yaml`（自ステージの outs テーブル名に対応するスキーマ）④ extra_deps の各 value |
-| params              | `stage.yaml:params` および `stage.yaml:inputs`                                                                                                                                                                            |
-| outs                | stage.yaml の outs の各 path から `data/stages/{name}/{path}` を生成                                                                                                                                                      |
-| desc                | stage.yaml の desc                                                                                                                                                                                                        |
+| dvc.yaml フィールド | 導出元                                                                                                                                                                                                                                           |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| stage 名            | stages/ からの相対ディレクトリパス                                                                                                                                                                                                               |
+| cmd                 | `python stages/{name}/run.py`                                                                                                                                                                                                                    |
+| deps                | ① `stages/{name}/run.py`（自身のコード）② 上流ステージの全 outs ファイル（inputs の source_stage から展開）③ `config/table_schemas/{table}.yaml`（自ステージの outs テーブル名に対応するスキーマ）④ extra_deps の各 value                        |
+| params              | `stage.yaml` の `params`・`inputs` キー（`stages/{name}/stage.yaml: [params, inputs]`）。`params` 内の上流参照値（`{ from: ... }`）は参照先へも展開（`stages/{from}/stage.yaml: [{key}]`、[stage.md](stage.md#params-の上流参照横断パラメータ)） |
+| outs                | stage.yaml の outs の各 path から `data/stages/{name}/{path}` を生成                                                                                                                                                                             |
+| desc                | stage.yaml の desc                                                                                                                                                                                                                               |
 
 ## ステージ包含ルール
 
@@ -47,6 +47,8 @@ active ステージが inputs で planned ステージを参照する場合、�
 | TableSchemaSet 整合性（FK 参照先・型一致）         | YES              | ---             |
 | column_descriptions 未記述                         | YES（警告）      | ---             |
 
+`staqkit validate` の各検査群は `--target schema|references|descriptions` で個別実行でき、編集ループ中の部分検証に使える（[cli.md](cli.md#staqkit-validate)）。
+
 ## 生成例
 
 stage.yaml:
@@ -64,6 +66,7 @@ outs:
         add_datastore: true
 params:
     method: z_score
+    sampling_rate: { from: import }
 inputs:
     - source_stage: import
 ```
@@ -85,6 +88,8 @@ stages:
             - stages/normalize/stage.yaml:
                   - params
                   - inputs
+            - stages/import/stage.yaml:
+                  - params.sampling_rate
         outs:
             - data/stages/normalize/timeseries.parquet
             - data/stages/normalize/dtype.parquet

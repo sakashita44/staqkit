@@ -152,7 +152,7 @@ DataStore の組み立て（ステージ走査・ファイル収集・スコー�
 1. `build_scoped_engine(scope, layout, schemas) -> QueryEngine`: `scope` に含まれるステージの `add_datastore: true` な outs を、同名テーブル（ステム一致）ごとに UNION ALL して VIEW 登録し、read-only の QueryEngine を返す。
 1. 上記を結線して DataStore を構築する。
 
-`ScopeSpec` は解決済みのステージ集合を表す。上流閉包の算出は呼び出し側（`run_stage` / CLI）の責務であり、`build_scoped_engine` は「与えられた集合のファイルを集めて VIEW 化する」ことに専念する。外部データ（`data/external/<source>/<stage>/`）を扱う場合に備え、`ScopeSpec` はソースを区別できる形（内部ソースを既定とする）で定義する。
+`ScopeSpec` は解決済みのステージ集合を表す。上流閉包の算出は呼び出し側（`run_stage` / CLI）の責務であり、`build_scoped_engine` は「与えられた集合のファイルを集めて VIEW 化する」ことに専念する。
 
 ### 入口
 
@@ -460,8 +460,10 @@ Protocol は VIEW ベースを前提とする。TABLE 対応は将来のパフ�
 
 ## 外部データアクセス
 
-外部リポジトリからインポートしたデータも、Project 層のスコープ解決ファクトリ（[スコープ解決ファクトリ](#スコープ解決ファクトリ)）経由でアクセスする。DataStore 自体は「データが外部由来かどうか」を知る必要がない。ファクトリが外部ディレクトリ（`data/external/<source>/<stage>/`）を走査して VIEW 登録した QueryEngine と TableSchemaSet を組み立て、通常のコンストラクタに渡す。`ScopeSpec` がソースを区別する形をとるのは、この外部ソースを内部ステージと同じ経路に載せるためである。
+外部リポジトリから取り込んだデータ（`data/external/<source>/<stage>/`）は DataStore へ直接は載せない。生データ（`data/raw/`）と同じく**ソース**として扱い、下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[external-data.md](../external-data.md)）。これにより DataStore は外部由来かどうかを一切知らずに済み、外部スキーマを転送・解釈する仕組みも不要になる。取り込みステージを通さず外部データを直接クエリすることは想定しない。
 
 ### 非 Parquet データの発見
 
 バイナリファイル（ML モデル等）を DataStore 経由で発見可能にするパターン: パスを格納した Parquet（`add_datastore: true`）+ バイナリ本体（`add_datastore: false`）。DataStore で「どのモデルがどこにあるか」を検索し、実体はパスで直接アクセス。
+
+外部ツール出力（モーションキャプチャの trc/tsv、c3d→csv 等、[#6](https://github.com/sakashita44/staqkit/issues/6)）も同じパターンで扱う。実体ファイルを `add_datastore: false` の out として宣言し、パスを格納した sidecar parquet（`add_datastore: true`）を併設して DataStore から発見可能にする。取り込みステージ（`staqkit add-stage --template ingest`）の雛形がこの構成を生成する。

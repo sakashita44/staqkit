@@ -140,6 +140,10 @@ staqkit が後方互換を守る対象は段階づけられる。強制ではな
 - プロセス内クエリに触れる機能 → DataStore（およびスコープ解決ファクトリ）
 - リポジトリ操作（メタデータ・dvc/git 呼び出し）→ CLI サブコマンド
 
+### 横断パラメータ
+
+複数ステージが同じ値を用いる場合、値を各 stage.yaml に重複記述せず、定義元（最初にその値を用いる上流ステージ）の param を下流が `params` の値として参照する（`{ from: <上流ステージ> }`、[stage.md](components/stage.md#params-の上流参照横断パラメータ)）。共有専用の置き場所も専用セクションも設けない。これは stage.yaml 自身が既に DVC の params ファイルとして参照されている構造の延長であり、値の SSoT を定義元に一本化しつつ、参照側に依存の明示性を残す。使われない値は定義されない（最初に使うステージで定義される）ため、どのステージにも属さない宙に浮いた共有定数は生じない。
+
 ### 状態モデル
 
 staqkit 内の状態は一方向の導出関係に従う。stage.yaml の status がSSoTであり、dvc.yaml は stage.yaml から生成される派生物、実行時の鮮度（dvc status）はさらにその導出である。下流が上流を変更することはない。
@@ -185,7 +189,7 @@ staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の�
 - `ConfigError`
     - `SchemaDefinitionError`: DDL パース失敗、table_schema YAML 単体の外形違反（`column_descriptions` が DDL 不在カラムを参照する等）
     - `StageDefinitionError`: stage.yaml の外形違反、outs key 重複、add_datastore クロス検証違反
-    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。source_stage 不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#上流dag理解)）
+    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。source_stage 不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#追跡性)）
 - `ValidationError`
     - `SchemaMismatchError`: カラム名・型不一致、ステージ間 UNION ALL 非互換
     - `ConstraintViolationError`: NOT NULL / PK / UNIQUE / CHECK / FK 違反
@@ -256,7 +260,7 @@ stages/
 | 異質データ共存             | format ディスパッチ（Parquet/CSV/pickle/npy）                                                        |
 | 管理境界インターフェース   | [StageInfo + DataStore + run_stage](components/stage.md#実行モデル) が管理下/管理外の境界 API を提供 |
 | 拡張性                     | ステージ追加 = ディレクトリ追加                                                                      |
-| リポジトリ境界を越えた合成 | dvc import + スコープ解決ファクトリによる外部データ用 DataStore 生成                                 |
+| リポジトリ境界を越えた合成 | dvc import（外部データをソースとして取り込み）+ 取り込みステージによる DataStore 統合                |
 | 設計時のステージ状態       | stage.yaml status + inactive 伝搬                                                                    |
 | 解析と出力の分離           | ステージ設計による分離                                                                               |
 
@@ -266,6 +270,7 @@ stages/
 | ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
 | DAG構造                        | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                                 |
 | パラメータ                     | stages/xxx/stage.yaml                     | params セクション                                                           |
+| 横断参照パラメータ             | 定義元 stages/xxx/stage.yaml              | 参照側は params 内で `{ from: <上流ステージ> }` として参照                  |
 | inputs（依存先ステージ）       | stages/xxx/stage.yaml                     | inputs セクション（source_stage のみ）                                      |
 | description（1行）             | stages/xxx/stage.yaml                     | desc フィールド                                                             |
 | description（詳細）            | stages/xxx/README.md                      | アルゴリズム説明                                                            |
@@ -278,6 +283,4 @@ stages/
 
 ## 未解決事項
 
-- 横断パラメータの扱い: 複数ステージで同じ値を参照するケースに対する設計仕様上の解決策
 - `staqkit remote` コマンド群の具体設計
-- 外部データ用スコープ解決ファクトリの具体設計（外部 import データを `build_scoped_engine` に載せる経路）
