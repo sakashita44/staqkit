@@ -55,13 +55,13 @@ staqkit validate --target references   # 参照整合性のみ
 staqkit validate --target descriptions # description 網羅検査のみ
 ```
 
-引数なしで横断的なフルチェックを実行する。検査は内部で検査群に分割され、`--target` で対象を絞って編集ループ中の部分検証に使える。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
+引数なしで横断的なフルチェックを実行する。全検査群を回す `staqkit validate` が保証の本体であり、A3（引き継ぎ）・A5（公開）のゲートはこれに依存する。`--target` は編集ループ中に「いま触っている部分だけ」を回すための便宜フィルタであり、検査群の網羅的な列挙でも硬い契約でもない。検査群が増えても、単独実行したい編集ループの局面がある場合にだけ既存のいずれかへ寄せ、なければフル実行に委ねる。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
 
-- 参照整合性（source_stage の実在確認・循環検出）: `--target references`
+- 参照整合性（source_stage の実在確認・循環検出、params 束縛先 `file`・`key` の実在確認）: `--target references`
 - スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
 - description 網羅検査（説明欄充足・説明系ファイル存在）と column_descriptions 未記述の警告: `--target descriptions`
 
-検査群の実装時仕様の確定は [#19](https://github.com/sakashita44/staqkit/issues/19) で追跡する。
+検査群の責務分割の経緯と方針（CLI コマンドを増やさず `--target` フラグで出し分ける判断）は [#19](https://github.com/sakashita44/staqkit/issues/19) で確定済み。キャッチオール検査対象ファイルの具体的列挙など残る詳細は validate 実装時に確定する。
 
 ## データ管理
 

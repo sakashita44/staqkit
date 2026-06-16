@@ -410,7 +410,7 @@
 - **対応要求**: 検証（自己契約の再帰）
 - **典型操作**: 編集対象に絞った検査を実行（pre-commit フック、または対象を限定した検査呼び出し）
 - **実現区分**: CLI + Pattern
-- **補足**: D2 のフル検査は時間がかかり編集サイクルに組み込みにくい。「いま触っている部分だけ」を検査する個別実行は `staqkit validate --target schema|references|descriptions` で行う（→ #19、[components/cli.md](components/cli.md#staqkit-validate)）。D2 の検査群のうち構文・外形（stage.yaml / table_schemas）と参照整合性が本 UC の主対象
+- **補足**: D2 のフル検査は時間がかかり編集サイクルに組み込みにくい。「いま触っている部分だけ」を検査する個別実行は `staqkit validate --target schema|references|descriptions` で行う（→ [components/cli.md](components/cli.md#staqkit-validate)）。D2 の検査群のうち構文・外形（stage.yaml / table_schemas）と参照整合性が本 UC の主対象
 
 ### D2. 引き継ぎ・公開前に全体健全性を保証する
 
@@ -418,7 +418,7 @@
 - **対応要求**: 検証（自己契約の再帰）, M1 契約強制, U4, T1
 - **典型操作**: 全体検査（`staqkit validate`）を実行し、鮮度（→ D3）・再現性（→ D4）と併せて公開/引き継ぎの可否を判断する
 - **実現区分**: CLI + Git+DVC
-- **補足**: A3（引き継ぎ受け渡し）・A5（公開）が呼ぶゲート。保証が要求する検査群は次のとおりで、各検査がどの柱を満たすかを併記する。これらは検証コンポーネントへの要求であり、個別実行は `staqkit validate --target` で提供する（→ [components/cli.md](components/cli.md#staqkit-validate)、#19）
+- **補足**: A3（引き継ぎ受け渡し）・A5（公開）が呼ぶゲート。保証が要求する検査群は次のとおりで、各検査がどの柱を満たすかを併記する。これらは検証コンポーネントへの要求であり、個別実行は `staqkit validate --target` で提供する（→ [components/cli.md](components/cli.md#staqkit-validate)）
 
 | 検査群           | 内容                                                                                                                                     | 満たす柱 | 実装                    |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------- |
@@ -431,7 +431,7 @@
 | パラメータ整合   | params 編集の鮮度は dvc status（D3）が検出。来歴（params・ハッシュ）は dvc.lock + git 履歴を源泉とし独立記録を持たないため整合検査は不要 | T1       | dvc status / Git        |
 | 外部参照解決     | 取り込みポインタ（repo.url + rev_lock）の構造的整合（記録の存在・形式）。runtime 到達性は DVC 責務で対象外                               | T1       | ReferenceIntegrityError |
 
-スキーマ準拠検査はステージ実行時の `DataStore.write_table` 書き込み（Library）でも局所的に行われ（→ B14）、本 UC はリポジトリ全体を横断検査する役割。検査群は `staqkit validate --target` で個別実行できる（→ #19）。description 網羅検査は Layer1（stage.yaml desc 非空）・Layer2（README.md 存在）・column_descriptions（全カラム説明）の充足を warning で報告する（Layer3 の外部参照は任意のため対象外）。キャッチオール検査対象ファイルの具体的列挙は実装時に確定（→ #19）。クロスリポのスキーマ整合性検査は外部データをソース扱いとする方針（[external-data.md](components/external-data.md)）により不要となり、取り込みポインタの構造整合は外部参照解決検査（`ReferenceIntegrityError`）でカバーする
+スキーマ準拠検査はステージ実行時の `DataStore.write_table` 書き込み（Library）でも局所的に行われ（→ B14）、本 UC はリポジトリ全体を横断検査する役割。検査群は `staqkit validate --target` で個別実行できる。description 網羅検査は Layer1（stage.yaml desc 非空）・Layer2（README.md 存在）・column_descriptions（全カラム説明）の充足を warning で報告する（Layer3 の外部参照は任意のため対象外）。キャッチオール検査対象ファイルの具体的列挙は実装時に確定する。クロスリポのスキーマ整合性検査は外部データをソース扱いとする方針（[external-data.md](components/external-data.md)）により不要となり、取り込みポインタの構造整合は外部参照解決検査（`ReferenceIntegrityError`）でカバーする
 
 ### D3. 再実行が要るステージを知る（鮮度）
 
