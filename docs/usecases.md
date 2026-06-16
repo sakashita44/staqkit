@@ -82,7 +82,7 @@
     1. `staqkit validate` で整合確認
     1. 必要なら `staqkit repro` で再生成可能性を確認
 - **実現区分**: Git+DVC + CLI
-- **補足**: 受け渡し側のスナップショット品質次第で操作量が変わる。validate を `--target` で細分化したことで、「最小限の確認」のみで使い始める導線がある（→ [components/cli.md](components/cli.md#staqkit-validate)）
+- **補足**: 受け渡し側のスナップショット品質次第で操作量が変わる。validate は `--target` で個別実行でき、「最小限の確認」のみで使い始める導線がある（→ [components/cli.md](components/cli.md#staqkit-validate)）
 
 ### A5. プロジェクトを公開する
 
@@ -150,7 +150,7 @@
 - **対応要求**: 派生（拡張性）
 - **典型操作**:
     1. `staqkit add-stage <path>` で雛形生成（→ #7）
-    1. stage.yaml に inputs/outs/params を記述
+    1. stage.yaml に inputs/outs と params 束縛（外部 params ファイルへの参照）を記述
     1. run.py に処理を実装
     1. `staqkit validate` で参照整合性確認
     1. `staqkit repro <stage>` で実行
@@ -162,7 +162,7 @@
 - **目的**: 既存ステージのパラメータを調整して結果を比較する
 - **対応要求**: 委譲（部分再生成）, T1
 - **典型操作**:
-    1. stage.yaml の params を編集
+    1. params ファイルの値を編集（束縛先を変える場合のみ stage.yaml の `params` を編集）
     1. `staqkit repro <stage>` で部分再生成
     1. `staqkit history <stage>` で過去実行と比較
 - **実現区分**: CLI
@@ -424,6 +424,7 @@
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------- |
 | 構文・外形       | stage.yaml / table_schemas の必須フィールド・型・構造、埋め込み DDL 構文                                                                 | 検証     | Pydantic + sqlglot      |
 | 参照整合性       | stage.yaml 間 `source_stage` の実在・循環なし（DAG 構造）                                                                                | 検証     | networkx                |
+| params 束縛解決  | `params` の各束縛が指す `file` の実在と `key`（ネストパス）の存在。ローカル名の重複は YAML キー一意性で検出                              | 検証     | —                       |
 | スキーマ準拠     | `data/stages/*` の parquet が DDL に準拠                                                                                                 | M1       | DDL パース + 検証クエリ |
 | FK 整合性        | TableSchemaSet の FK 参照先テーブルの存在・型一致                                                                                        | M1       | —                       |
 | description 網羅 | ノード・カラムの説明（desc 欄 / README.md / column_descriptions）の欠落検出                                                              | U4       | —                       |
