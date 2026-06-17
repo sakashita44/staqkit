@@ -16,6 +16,7 @@ config/                      ← Git管理（プロジェクト設定）
 params/                      ← Git管理（パラメータ値）。推奨配置（強制ではない）
   motion.yaml                ← DVC ネイティブの params ファイル
   detect.yaml
+  normalize.yaml
 
 stages/                      ← Git管理（定義側）。再帰走査
   import/                    ← グループ（stage.yaml なし）
