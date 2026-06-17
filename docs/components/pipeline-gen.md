@@ -19,14 +19,14 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 
 ## 導出マッピング
 
-| dvc.yaml フィールド | 導出元                                                                                                                                                                                                                                           |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| stage 名            | stages/ からの相対ディレクトリパス                                                                                                                                                                                                               |
-| cmd                 | `python stages/{name}/run.py`                                                                                                                                                                                                                    |
-| deps                | ① `stages/{name}/run.py`（自身のコード）② 上流ステージの全 outs ファイル（inputs の source_stage から展開）③ `config/table_schemas/{table}.yaml`（自ステージの outs テーブル名に対応するスキーマ）④ extra_deps の各 value                        |
-| params              | `stage.yaml` の `params`・`inputs` キー（`stages/{name}/stage.yaml: [params, inputs]`）。`params` 内の上流参照値（`{ from: ... }`）は参照先へも展開（`stages/{from}/stage.yaml: [{key}]`、[stage.md](stage.md#params-の上流参照横断パラメータ)） |
-| outs                | stage.yaml の outs の各 path から `data/stages/{name}/{path}` を生成                                                                                                                                                                             |
-| desc                | stage.yaml の desc                                                                                                                                                                                                                               |
+| dvc.yaml フィールド | 導出元                                                                                                                                                                                                                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| stage 名            | stages/ からの相対ディレクトリパス                                                                                                                                                                                                                                     |
+| cmd                 | `python stages/{name}/run.py`                                                                                                                                                                                                                                          |
+| deps                | ① `stages/{name}/run.py`（自身のコード）② 上流ステージの全 outs ファイル（inputs の source_stage から展開）③ `config/table_schemas/{table}.yaml`（自ステージの outs テーブル名に対応するスキーマ）④ extra_deps の各 value                                              |
+| params              | `stage.yaml` の `params`・`inputs` キー（`stages/{name}/stage.yaml: [params, inputs]`）で束縛宣言自体を追跡。加えて `params` の各束縛の右辺 `(file, key)` を `file` 単位にまとめ、`<file>: [<key>, ...]` として展開する（[stage.md](stage.md#params外部ファイル参照)） |
+| outs                | stage.yaml の outs の各 path から `data/stages/{name}/{path}` を生成                                                                                                                                                                                                   |
+| desc                | stage.yaml の desc                                                                                                                                                                                                                                                     |
 
 ## ステージ包含ルール
 
@@ -65,8 +65,8 @@ outs:
         path: dtype.parquet
         add_datastore: true
 params:
-    method: z_score
-    sampling_rate: { from: import }
+    method: { file: params/normalize.yaml, key: method }
+    sampling_rate: { file: params/motion.yaml, key: sampling_rate }
 inputs:
     - source_stage: import
 ```
@@ -88,8 +88,10 @@ stages:
             - stages/normalize/stage.yaml:
                   - params
                   - inputs
-            - stages/import/stage.yaml:
-                  - params.sampling_rate
+            - params/normalize.yaml:
+                  - method
+            - params/motion.yaml:
+                  - sampling_rate
         outs:
             - data/stages/normalize/timeseries.parquet
             - data/stages/normalize/dtype.parquet

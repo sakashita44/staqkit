@@ -23,8 +23,8 @@ outs:
         add_datastore: false
 
 params:
-    cog_pgt_threshold: 50
-    cog_vel_thresholds: [100, 70, 50, 30, 0]
+    cog_pgt_threshold: { file: params/detect.yaml, key: cog_pgt_threshold }
+    cog_vel_thresholds: { file: params/detect.yaml, key: cog_vel_thresholds }
 
 inputs:
     - source_stage: compute_cog_velocity
@@ -35,14 +35,14 @@ extra_deps:
 
 ### セクションの役割
 
-| セクション | 役割                                          | DVC連携                                                     |
-| ---------- | --------------------------------------------- | ----------------------------------------------------------- |
-| desc       | ステージの1行説明                             | dvc.yaml の desc フィールドに転記                           |
-| status     | ステージの状態（active / planned / inactive） | planned は data/ 側未生成。inactive は下流に伝搬            |
-| outs       | 全出力宣言（path + add_datastore フラグ）     | dvc.yaml の outs: に展開。上流の outs は下流の deps: に展開 |
-| params     | 処理の振る舞い制御値（上流 param の参照も可） | dvc.yaml の params: で追跡                                  |
-| inputs     | 依存先ステージの宣言                          | dvc.yaml の params: + deps: で追跡                          |
-| extra_deps | DAG外の外部ファイル/ディレクトリ依存          | dvc.yaml の deps: に展開                                    |
+| セクション | 役割                                                  | DVC連携                                                     |
+| ---------- | ----------------------------------------------------- | ----------------------------------------------------------- |
+| desc       | ステージの1行説明                                     | dvc.yaml の desc フィールドに転記                           |
+| status     | ステージの状態（active / planned / inactive）         | planned は data/ 側未生成。inactive は下流に伝搬            |
+| outs       | 全出力宣言（path + add_datastore フラグ）             | dvc.yaml の outs: に展開。上流の outs は下流の deps: に展開 |
+| params     | 外部 params ファイルのキーへの束縛（ローカル名 → 値） | dvc.yaml の params: で参照先キーを追跡                      |
+| inputs     | 依存先ステージの宣言                                  | dvc.yaml の params: + deps: で追跡                          |
+| extra_deps | DAG外の外部ファイル/ディレクトリ依存                  | dvc.yaml の deps: に展開                                    |
 
 ### outs 統一スキーマ
 
@@ -85,15 +85,15 @@ class OutsEntry:
 
 ### params と inputs の関心の分離
 
-| 依存の種類                                   | 宣言場所          | DVC 追跡経路        |
-| -------------------------------------------- | ----------------- | ------------------- |
-| どのステージに依存するか（DAG 構造）         | stage.yaml inputs | params + deps       |
-| パラメトリックな制御値                       | stage.yaml params | params              |
-| どのデータをどう取得するか（クエリロジック） | run.py            | deps（run.py 変更） |
+| 依存の種類                                   | 宣言場所                                  | DVC 追跡経路        |
+| -------------------------------------------- | ----------------------------------------- | ------------------- |
+| どのステージに依存するか（DAG 構造）         | stage.yaml inputs                         | params + deps       |
+| パラメトリックな制御値                       | stage.yaml params（外部ファイルへの束縛） | params              |
+| どのデータをどう取得するか（クエリロジック） | run.py                                    | deps（run.py 変更） |
 
-- **params**: 上流ノードの知識なしに記述可能な処理制御値。変更 → 再計算
+- **params**: 処理制御値への束縛。値は外部 params ファイルが持ち、stage.yaml はローカル名から参照先キーへの束縛を宣言する。参照先キーの値変更 → 再計算
 - **inputs**: 依存先ステージ名（`source_stage`）のみ宣言。DAG の辺の宣言 + DVC params 追跡の2つの役割を持つ
-- クエリ条件は run.py 内で開発者が直接記述する。フィルタ条件をパラメータとして変更可能にしたい場合は params に書き、run.py 内で `stage.params` 経由で使用する
+- クエリ条件は run.py 内で開発者が直接記述する。フィルタ条件をパラメータとして変更可能にしたい場合は params に束縛を宣言し、run.py 内で `stage.params` 経由で使用する
 
 ### inputs の形式
 
@@ -177,25 +177,28 @@ def run(stage: StageInfo, store: DataStore):
     cal_file = stage.extra_dep("calibration")   # → Path("data/raw/calibration.csv")
 ```
 
-### params の上流参照（横断パラメータ）
+### params（外部ファイル参照）
 
-複数ステージが同じ値（サンプリングレート、被験者リスト等）を用いる場合に、値を各 stage.yaml へ重複記述せず、定義元ステージの param を参照する。値は最初にそれを用いる上流ステージの `params` に定義し、下流は `params` の値として参照を書く。新しいセクションは設けず、params の値がリテラルか参照のいずれかを取る。
+params は処理の制御値を宣言する。値そのものは stage.yaml に書かず、DVC が追跡できる外部 params ファイルへ置き、stage.yaml は「ローカル名からどのファイルのどのキーを引くか」の束縛だけを持つ。
 
 ```yaml
 params:
-    method: z_score # ローカルなリテラル値
-    sampling_rate: { from: import/raw_motion } # 上流ステージの同名 param を参照
+    sampling_rate: { file: params/motion.yaml, key: sampling_rate }
+    cutoff: { file: params/motion.yaml, key: butterworth.cutoff }
+    threshold: { file: params/detect.yaml, key: cog_pgt_threshold }
 ```
 
-- 参照先（`from`）は `inputs` と同じパス形式（`stages/` からの相対パス。例 `import/raw_motion`）で指定する。ネスト構成で同名ステージが衝突しないよう、ステージ名ではなくパスで一意に解決する（[directory-layout.md](../directory-layout.md#stages)）。
-- 参照先は**上流（DAG 上の祖先）ステージに限る**。下流・無関係なステージの param は参照できない。
-- 既定では同名キーを参照する。上流側で名前が異なる場合は `{ from: <stage>, key: <上流のキー名> }` で指定する。
-- 値の SSoT は定義元ステージの stage.yaml に一本化される。参照側 stage.yaml には `{ from: ... }` が残るため、「このステージがその値に依存する」明示性は保たれる。
-- 解析コードからはリテラルと参照を区別せず `stage.params["sampling_rate"]` で解決値を読む。run.py は値の出所を意識しない。
+- 左辺（マッピングキー）は**ステージローカルなパラメータ名**。run.py は `stage.params["<左辺>"]` で値を読む。アクセス面はこの名前のみで、params ファイルの配置やネスト構造は run.py に現れない。
+- 右辺 `key` は DVC ネイティブのパラメータパス。ファイル内がネストしている場合は `butterworth.cutoff` のようにドットで辿る。`file` はリポジトリルート相対のパス。
+- 値の SSoT は params ファイル。stage.yaml はどの値を使うかの束縛宣言であり、値は持たない。
+- 同一ステージ内で左辺が重複した場合はエラー（YAML のキー一意性で検出される）。
+- params ファイルの再編（別ファイルへの移動・ファイル内ネストの変更）は右辺の修正だけで吸収され、run.py が使うキー（左辺）は不変に保たれる。値の所在の揺れを stage.yaml が吸収し、解析コードは平らなローカル名だけに依存する。
 
-ジェネレータは params 内の各参照を dvc.yaml の `params:` に `stages/<from>/stage.yaml: [<key>]` として追加で展開する（[pipeline-gen.md](pipeline-gen.md#導出マッピング)）。DVC は当該キー単位で追跡するため、参照先のその param が変わったときだけ参照側が無効化される（定義元の他 param 変更は波及しない）。参照側自身の `params` 部分木（`{ from: ... }` の指し先を含む）も従来どおり追跡されるため、参照先を別ステージへ張り替えれば参照側も無効化される。
+run.py には宣言した左辺の集合だけが `stage.params` に渡る。宣言していない params ファイル上の値は見えないため、「使う param ＝ 宣言した param」が構造的に保証され、DVC が追跡する範囲（dvc.yaml に出る参照先キー）と run.py が読む範囲が一致する。
 
-この仕組みは stage.yaml 自身が既に DVC の params ファイルとして参照されていること（`params`・`inputs` を `stage.yaml: [...]` で参照）の素直な延長であり、共有のための新しい置き場所も新しいセクションも導入しない。「使われない値は定義されない（最初に使うステージで定義される）」ため、どのステージにも属さない宙に浮いた共有定数は生じない。
+params ファイルは DVC ネイティブの params ファイル（任意の YAML）であり、staqkit は配置や粒度を規定しない。複数ステージが同じ `file`・`key` を参照すれば、その値を共有する。値の SSoT は単一ファイルに一本化され、どのステージにも帰属しない。共有のための専用構文も「定義元ステージ」の概念も持たない。慣習としては params ファイルをプロジェクト直下の `params/` に集約する運用を推奨するが、これは強制ではなく、DVC が読めるパスであればどこでもよい（[directory-layout.md](../directory-layout.md)）。
+
+ジェネレータは各束縛の右辺 `(file, key)` を `file` 単位にまとめ、dvc.yaml の `params:` へ `<file>: [<key>, ...]` として展開する（[pipeline-gen.md](pipeline-gen.md#導出マッピング)）。DVC は当該キー単位で追跡するため、参照したキーの値が変わったときだけ参照側ステージが無効化される。左辺（ローカル名）は dvc.yaml には現れない。
 
 ## ステージ状態管理
 

@@ -13,11 +13,16 @@ config/                      ← Git管理（プロジェクト設定）
     meta/                    ← サブディレクトリによる整理（テーブル名はファイル名で決まる）
       dtype.yaml
 
+params/                      ← Git管理（パラメータ値）。推奨配置（強制ではない）
+  motion.yaml                ← DVC ネイティブの params ファイル
+  detect.yaml
+  normalize.yaml
+
 stages/                      ← Git管理（定義側）。再帰走査
   import/                    ← グループ（stage.yaml なし）
     raw_motion/              ← ステージ "import/raw_motion"
       run.py                 ← エントリポイント
-      stage.yaml             ← params + inputs + desc
+      stage.yaml             ← params 参照 + inputs + desc
       README.md              ← アルゴリズム説明
     raw_force/
       run.py
@@ -85,3 +90,10 @@ data/                        ← DVC管理（成果物側）
 
 - ステージは `extra_deps` で `libs/...` を宣言して依存追跡する（[stage.md](components/stage.md#extra_deps-dag外の外部依存)）。変更は DVC が下流を無効化する。
 - 外部リポジトリで管理するコード/データは git submodule として `libs/<name>/` に配置できる。submodule コミットの更新が `extra_deps` 経由で DVC の変更検知に連動する。submodule を「生きたコード・データの共有」に使うのは、雛形コピー用途（不採用）とは別の用途であり distribution.md と整合する（[distribution.md](distribution.md#雛形と改善の伝播)）。
+
+## params（パラメータ値）
+
+パラメータの値は DVC ネイティブの params ファイル（任意の YAML）に置き、stage.yaml の `params` がローカル名から `{ file, key }` を束縛する（[stage.md](components/stage.md#params外部ファイル参照)）。
+
+- **配置は staqkit が規定しない**。`params/` への集約は一覧性のための推奨運用であり、強制ではない。stage.yaml の束縛が指すパス（リポジトリルート相対）を DVC が読めれば、配置はどこでもよい。
+- staqkit が前提とするのは「束縛に書かれたパスをリポジトリルート相対で解決する」一点のみ。ステージごとの相対パスは生じない。

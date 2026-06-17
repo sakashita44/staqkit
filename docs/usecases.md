@@ -82,7 +82,7 @@
     1. `staqkit validate` で整合確認
     1. 必要なら `staqkit repro` で再生成可能性を確認
 - **実現区分**: Git+DVC + CLI
-- **補足**: 受け渡し側のスナップショット品質次第で操作量が変わる。validate を `--target` で細分化したことで、「最小限の確認」のみで使い始める導線がある（→ [components/cli.md](components/cli.md#staqkit-validate)）
+- **補足**: 受け渡し側のスナップショット品質次第で操作量が変わる。validate は `--target` で個別実行でき、「最小限の確認」のみで使い始める導線がある（→ [components/cli.md](components/cli.md#staqkit-validate)）
 
 ### A5. プロジェクトを公開する
 
@@ -150,7 +150,7 @@
 - **対応要求**: 派生（拡張性）
 - **典型操作**:
     1. `staqkit add-stage <path>` で雛形生成（→ #7）
-    1. stage.yaml に inputs/outs/params を記述
+    1. stage.yaml に inputs/outs と params 束縛（外部 params ファイルへの参照）を記述
     1. run.py に処理を実装
     1. `staqkit validate` で参照整合性確認
     1. `staqkit repro <stage>` で実行
@@ -162,7 +162,7 @@
 - **目的**: 既存ステージのパラメータを調整して結果を比較する
 - **対応要求**: 委譲（部分再生成）, T1
 - **典型操作**:
-    1. stage.yaml の params を編集
+    1. params ファイルの値を編集（束縛先を変える場合のみ stage.yaml の `params` を編集）
     1. `staqkit repro <stage>` で部分再生成
     1. `staqkit history <stage>` で過去実行と比較
 - **実現区分**: CLI
@@ -410,7 +410,7 @@
 - **対応要求**: 検証（自己契約の再帰）
 - **典型操作**: 編集対象に絞った検査を実行（pre-commit フック、または対象を限定した検査呼び出し）
 - **実現区分**: CLI + Pattern
-- **補足**: D2 のフル検査は時間がかかり編集サイクルに組み込みにくい。「いま触っている部分だけ」を検査する個別実行は `staqkit validate --target schema|references|descriptions` で行う（→ #19、[components/cli.md](components/cli.md#staqkit-validate)）。D2 の検査群のうち構文・外形（stage.yaml / table_schemas）と参照整合性が本 UC の主対象
+- **補足**: D2 のフル検査は時間がかかり編集サイクルに組み込みにくい。「いま触っている部分だけ」を検査する個別実行は `staqkit validate --target schema|references|descriptions` で行う（→ [components/cli.md](components/cli.md#staqkit-validate)）。D2 の検査群のうち構文・外形（stage.yaml / table_schemas）と参照整合性が本 UC の主対象
 
 ### D2. 引き継ぎ・公開前に全体健全性を保証する
 
@@ -418,19 +418,20 @@
 - **対応要求**: 検証（自己契約の再帰）, M1 契約強制, U4, T1
 - **典型操作**: 全体検査（`staqkit validate`）を実行し、鮮度（→ D3）・再現性（→ D4）と併せて公開/引き継ぎの可否を判断する
 - **実現区分**: CLI + Git+DVC
-- **補足**: A3（引き継ぎ受け渡し）・A5（公開）が呼ぶゲート。保証が要求する検査群は次のとおりで、各検査がどの柱を満たすかを併記する。これらは検証コンポーネントへの要求であり、個別実行は `staqkit validate --target` で提供する（→ [components/cli.md](components/cli.md#staqkit-validate)、#19）
+- **補足**: A3（引き継ぎ受け渡し）・A5（公開）が呼ぶゲート。保証が要求する検査群は次のとおりで、各検査がどの柱を満たすかを併記する。これらは検証コンポーネントへの要求であり、個別実行は `staqkit validate --target` で提供する（→ [components/cli.md](components/cli.md#staqkit-validate)）
 
 | 検査群           | 内容                                                                                                                                     | 満たす柱 | 実装                    |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | -------- | ----------------------- |
 | 構文・外形       | stage.yaml / table_schemas の必須フィールド・型・構造、埋め込み DDL 構文                                                                 | 検証     | Pydantic + sqlglot      |
 | 参照整合性       | stage.yaml 間 `source_stage` の実在・循環なし（DAG 構造）                                                                                | 検証     | networkx                |
+| params 束縛解決  | `params` の各束縛が指す `file` の実在と `key`（ネストパス）の存在。ローカル名の重複は YAML キー一意性で検出                              | 検証     | —                       |
 | スキーマ準拠     | `data/stages/*` の parquet が DDL に準拠                                                                                                 | M1       | DDL パース + 検証クエリ |
 | FK 整合性        | TableSchemaSet の FK 参照先テーブルの存在・型一致                                                                                        | M1       | —                       |
 | description 網羅 | ノード・カラムの説明（desc 欄 / README.md / column_descriptions）の欠落検出                                                              | U4       | —                       |
 | パラメータ整合   | params 編集の鮮度は dvc status（D3）が検出。来歴（params・ハッシュ）は dvc.lock + git 履歴を源泉とし独立記録を持たないため整合検査は不要 | T1       | dvc status / Git        |
 | 外部参照解決     | 取り込みポインタ（repo.url + rev_lock）の構造的整合（記録の存在・形式）。runtime 到達性は DVC 責務で対象外                               | T1       | ReferenceIntegrityError |
 
-スキーマ準拠検査はステージ実行時の `DataStore.write_table` 書き込み（Library）でも局所的に行われ（→ B14）、本 UC はリポジトリ全体を横断検査する役割。検査群は `staqkit validate --target` で個別実行できる（→ #19）。description 網羅検査は Layer1（stage.yaml desc 非空）・Layer2（README.md 存在）・column_descriptions（全カラム説明）の充足を warning で報告する（Layer3 の外部参照は任意のため対象外）。キャッチオール検査対象ファイルの具体的列挙は実装時に確定（→ #19）。クロスリポのスキーマ整合性検査は外部データをソース扱いとする方針（[external-data.md](components/external-data.md)）により不要となり、取り込みポインタの構造整合は外部参照解決検査（`ReferenceIntegrityError`）でカバーする
+スキーマ準拠検査はステージ実行時の `DataStore.write_table` 書き込み（Library）でも局所的に行われ（→ B14）、本 UC はリポジトリ全体を横断検査する役割。検査群は `staqkit validate --target` で個別実行できる。description 網羅検査は Layer1（stage.yaml desc 非空）・Layer2（README.md 存在）・column_descriptions（全カラム説明）の充足を warning で報告する（Layer3 の外部参照は任意のため対象外）。キャッチオール検査対象ファイルの具体的列挙は実装時に確定する。クロスリポのスキーマ整合性検査は外部データをソース扱いとする方針（[external-data.md](components/external-data.md)）により不要となり、取り込みポインタの構造整合は外部参照解決検査（`ReferenceIntegrityError`）でカバーする
 
 ### D3. 再実行が要るステージを知る（鮮度）
 
