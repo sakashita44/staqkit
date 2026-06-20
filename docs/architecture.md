@@ -1,12 +1,12 @@
 # アーキテクチャ
 
-本文書はツール非依存の設計構造・方針を記述する。各コンポーネントの具体仕様は [components/](components/) に記載するが、DI境界の内側にある部品（QueryEngine等）はインターフェース主体で記述し、具体実装は差し替え可能な選択として扱う。差し替えが現実的でない基盤（Git, DVC）は具体名で直接参照する。
+各コンポーネントの具体仕様は [components/](components/) に記載する。依存性注入（DI）境界の内側にある部品（QueryEngine 等）はインターフェース主体で記述し、具体実装は差し替え可能な選択として扱う。差し替えが現実的でない基盤（Git, DVC）は具体名で直接参照する。
 
 ## 概要
 
-staqkit の正体は「規約を強制する CLI アプリ」と「ステージコードが依存する薄いランタイム」の二面を持つ一つの道具である（[distribution.md](distribution.md)）。本文書はその内部構造を扱う。
+staqkit は、規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙依存の外部化と再現性・追跡性の保証を目指す（[distribution.md](distribution.md)）。
 
-実装は2層構成を採る。下層の **Core 層** はドメイン非依存の汎用部品群であり、上層の **Project 層** がプロジェクト固有の規約（`stages/`, `config/` 等）を解釈して Core を組み立てる。CLI 層はこの上に乗るエントリポイントである。
+実装は2層構成を採る。下層の Core 層はドメイン非依存の汎用部品群であり、上層の Project 層がプロジェクト固有の規約（`stages/`, `config/` 等）を解釈して Core を組み立てる。CLI 層はこの上に乗るエントリポイントである。
 
 ```text
 src/staqkit/
@@ -45,12 +45,12 @@ Core 層はテーブル名とファイルパスのリストだけを受け取る
 
 ### スコープ解決ファクトリと依存方向
 
-スコープ解決（stage.yaml 走査・ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層の **スコープ解決ファクトリ**に集約する。これは DataStore と CLI が共有する土台であり、クラスではなく関数群として、組み立てフローの各ステップを独立した単位で提供する（具体仕様は [datastore.md](components/datastore.md#スコープ解決ファクトリ)）。利用者向けの入口は二段に分かれる。
+スコープ解決（stage.yaml 走査・ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層のスコープ解決ファクトリに集約する。これは DataStore と CLI が共有する土台であり、クラスではなく関数群として、組み立てフローの各ステップを独立した単位で提供する（具体仕様は [datastore.md](components/datastore.md#スコープ解決ファクトリ)）。利用者向けの入口は二段に分かれる。
 
 - `build_scoped_engine(scope, layout, schemas) -> QueryEngine`: 解決済みスコープから read-only の QueryEngine を返す低レベル入口
 - `open_store(stage, schemas, *, writable) -> DataStore`: run.py 向けの高レベル入口。`StageInfo` 一つから読み取りスコープ（inputs 由来）と書き込み対象（outs 由来）を導出し、内部で `build_scoped_engine` を用いる
 
-依存方向は次のとおりに引く。**CLI のデータ参照コマンド（catalog / validate）は DataStore ファサードに依存せず、スコープ解決ファクトリ（+ Core の SchemaValidator）に依存する**。DataStore は run.py / notebook 向けの祝福されたメイン経路であり、CLI はランタイムのファサードを介さず同じ土台を直接使う。両者はファサードを共有しないため、データ参照のために CLI が DataStore を import することはない。
+依存方向は次のとおりに引く。CLI のデータ参照コマンド（catalog / validate）は DataStore ファサードに依存せず、スコープ解決ファクトリ（+ Core の SchemaValidator）に依存する。DataStore は run.py / notebook 向けの祝福されたメイン経路であり、CLI はランタイムのファサードを介さず同じ土台を直接使う。両者はファサードを共有しないため、データ参照のために CLI が DataStore を import することはない。
 
 ドメインスキーマ非依存で動く経路（`fetch()` による直接 SQL）を常に提供する。これは祝福されたメイン経路（`query()`）に対する無保証の抜け道であり、詳細は[設計方針](#守る契約とアクセス経路の保証グラデーション)に従う。
 
@@ -71,12 +71,12 @@ ProjectLayout は frozen dataclass であり、プロジェクトルートから
 
 差し替え性は二つの異なるものに分けて扱う。
 
-- **ユーザ契約としての差し替え性**: 採らない。DuckDB を staqkit の IF=契約として固定する。staqkit は DuckDB をデータ格納先ではなくクエリ IF としてのみ用いる（データ実体は parquet、エンジンは `:memory:`）ため、IF を契約として固定することに無理はない。
+- **ユーザ契約としての差し替え性**: 採らない。DuckDB を staqkit の IF=契約として固定する。staqkit は DuckDB をクエリ IF としてのみ用いる（データ実体は parquet、エンジンは `:memory:`）ため、IF を契約として固定することに無理はない。
 - **保守者アフォーダンスとしての差し替え性**: 残す。将来の保守者（自分を含む）が限定された労力でエンジンや戻り値ライブラリを置換できる構造を保つ。保証ではなく「差し替えやすさ」である。
 
-この方針に従い、QueryEngine は Protocol として定義する。目的は「利用者が DuckDB に依存しないようにする」ことではなく、「保守者がエンジンを置換できる継ぎ目を一箇所に集める」ことである。テスト時のモック差し替えも同じ継ぎ目で行う。戻り値の Polars も同様に継ぎ目を局所化し、将来より良いライブラリへ移行する場合のコストを bounded に保つ。
+この方針に従い、QueryEngine は Protocol として定義する。目的は、保守者がエンジンを置換できる継ぎ目を一箇所に集めることである。テスト時のモック差し替えも同じ継ぎ目で行う。戻り値の Polars も同様に継ぎ目を局所化し、将来より良いライブラリへ移行する場合のコストを bounded に保つ。
 
-### migration surface
+### エンジン置換時の作業範囲
 
 エンジン置換時に触れる必要がある箇所を migration surface として明示する。差し替え性は best-effort であり、これらの存在は矛盾ではなく「置換時の作業範囲」を意味する。
 

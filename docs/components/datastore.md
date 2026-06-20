@@ -1,8 +1,8 @@
 # DataStore
 
-run.py / notebook 向けの、データアクセスの**祝福されたメイン経路**。スコープ解決済みの Parquet ファイル群をクエリエンジン上に VIEW として結合し、契約検証つきの高レベル API（`query`）または生 SQL の抜け道（`fetch`）でクエリする。クエリエンジンは Protocol として定義されており、現在の実装は DuckDB（`:memory:` モード）。
+run.py / notebook 向けの、データアクセスの祝福されたメイン経路。スコープ解決済みの Parquet ファイル群をクエリエンジン上に VIEW として結合し、契約検証つきの高レベル API（`query`）または生 SQL の抜け道（`fetch`）でクエリする。クエリエンジンは Protocol として定義されており、現在の実装は DuckDB（`:memory:` モード）。
 
-DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走査しない。組み立て（ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層の**スコープ解決ファクトリ**の責務であり、DataStore は解決済みのクエリエンジンを受け取る。同じファクトリを CLI のデータ参照コマンド（catalog / validate）も用いるため、CLI は DataStore ファサードに依存しない（[architecture.md](../architecture.md#スコープ解決ファクトリと依存方向)）。
+DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走査しない。組み立て（ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層のスコープ解決ファクトリの責務であり、DataStore は解決済みのクエリエンジンを受け取る。同じファクトリを CLI のデータ参照コマンド（catalog / validate）も用いるため、CLI は DataStore ファサードに依存しない（[architecture.md](../architecture.md#スコープ解決ファクトリと依存方向)）。
 
 ## TableSchemaSet
 
@@ -269,7 +269,7 @@ def run(stage: StageInfo, store: DataStore):
 - テーブル名のみ指定。出力先パスは DataStore がコンストラクタで受け取った `output_paths` から内部解決
 - スキーマバリデーション + ファイル書き込みを一体で行う（バリデーション忘れ防止）
 - `output_paths` が `None`（読み取り専用インスタンス）の場合はエラー
-- **書き込んだデータはその DataStore インスタンスからは読めない**（QueryEngine 内の VIEW を変更しない。DataStore は実行中 immutable）。run.py 内では書き込み前の DataFrame を直接保持しているため、再読み込みの必要はない
+- 書き込んだデータはその DataStore インスタンスからは読めない（QueryEngine 内の VIEW を変更しない。DataStore は実行中 immutable）。run.py 内では書き込み前の DataFrame を直接保持しているため、再読み込みの必要はない
 
 ### 出力パスの SSoT
 
@@ -326,7 +326,7 @@ def schema(self, table: str) -> TableSchema:
 
 DataStore は同名テーブルを全ステージ分 UNION ALL して1つの VIEW にする。全ステージが同一のカラム定義を持つことが要求されるため、`config/table_schemas/` をコンシューマ側の契約として維持し、プロデューサー側の契約は書き込み時バリデーションで実現する。
 
-スキーマ定義は SQL DDL をそのまま記述する。YAML で DDL のサブセットを再発明するのではなく、DuckDB にそのまま渡せる標準 SQL を正統な形式とする。カタログ等の staqkit 固有メタデータは YAML フィールドとして併記する。
+スキーマ定義は SQL DDL をそのまま記述する。DuckDB にそのまま渡せる標準 SQL を正統な形式とする。カタログ等の staqkit 固有メタデータは YAML フィールドとして併記する。
 
 ```yaml
 # config/table_schemas/timeseries.yaml
@@ -347,7 +347,7 @@ column_descriptions:
     value: "測定値。意味と単位は dkey に従属"
 ```
 
-- `ddl`: SQL DDL（CREATE TABLE 文）。DuckDB にそのまま渡せる標準 SQL を正統な形式とし、YAML で DDL のサブセットを再発明しない。DDL は DuckDB 依存であり CHECK 式にエンジン固有関数を含みうる。これはエンジン差し替え時に触れる migration surface（[architecture.md](../architecture.md#migration-surface)）であり、置換時には DDL のマイグレーションを伴う
+- `ddl`: SQL DDL（CREATE TABLE 文）。DuckDB にそのまま渡せる標準 SQL を正統な形式とする。DDL は DuckDB 依存であり CHECK 式にエンジン固有関数を含みうる。これはエンジン差し替え時に触れる migration surface（[architecture.md](../architecture.md#エンジン置換時の作業範囲)）であり、置換時には DDL のマイグレーションを伴う
 - `description`: テーブルの説明（カタログ出力に使用）
 - `catalog`: `staqkit catalog` の出力対象とするか（デフォルト: false）。CLI で `--table` を明示指定した場合はそちらが優先
 - `column_descriptions`: カラム名 → 説明文字列のマップ。単位は説明内に記述する（例: `"体重 [kg]"`）。FK カラムの description は省略可（参照先の description で意味が明確なため）

@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-実験データ解析のための道具。規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムの二面を持つ。解析者の暗黙的な依存（データの意味、パラメータの経緯、処理の前提条件）を明示的に外部化し、再現性と追跡性を構造的に保証する。
+実験データ解析のための道具。規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙的な依存（データの意味、パラメータの経緯、処理の前提条件）を明示的に外部化し、再現性と追跡性を構造的に保証することを目指す。
 
 設計ドキュメント: `docs/` 配下
 
 - [docs/requirements.md](docs/requirements.md) — 要求定義（設計ファースト + 信頼・理解・独立の三柱）
 - [docs/usecases.md](docs/usecases.md) — ユースケース・シナリオ体系（CLI/Library/Git+DVC/Pattern の振り分け、未仕様ポイント一覧）
-- [docs/architecture.md](docs/architecture.md) — アーキテクチャ（正体・層構造・設計方針・差し替え性・要求マッピング）
-- [docs/distribution.md](docs/distribution.md) — 位置づけと配布（正体・パッケージ配布・Copier 雛形伝播）
+- [docs/architecture.md](docs/architecture.md) — アーキテクチャ（概要・層構造・設計方針・差し替え性・要求マッピング）
+- [docs/distribution.md](docs/distribution.md) — 位置づけと配布（概念・パッケージ配布・Copier 雛形伝播）
 - [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
 - [docs/components/datastore.md](docs/components/datastore.md) — DataStore（識別軸定義・クエリAPI・バリデーション）
 - [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・実行モデル・来歴）
