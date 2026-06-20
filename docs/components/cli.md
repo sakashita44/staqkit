@@ -77,14 +77,6 @@ staqkit clean --remove     # 確認の上、実際に削除
 - `data/stages/xxx/` が存在するが対応する `stage.yaml` がない（孤児）
 - `data/stages/xxx/` が存在し、status が inactive（休止中データ）
 
-### staqkit import
-
-```bash
-staqkit import --repo <url> --stages <list>
-```
-
-外部リポジトリからデータをインポートする。詳細は [外部データ](external-data.md) を参照。
-
 ## スキーマ内省・カタログ出力
 
 これらのコマンドは「テーブルの構造・意味」と「テーブルの実体（行）」を別々に見せる。`schema` / `column` は `config/table_schemas/`（[TableSchemaSet](datastore.md#tableschemaset)）由来で、データ実体がなくても引ける構造・意味の面を出力する。`catalog` は `data/stages/` 由来で、スコープ内の実データ行をダンプする。

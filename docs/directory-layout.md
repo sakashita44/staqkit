@@ -37,9 +37,6 @@ libs/                        ← Git管理（共有コード）。複数ステ�
   sim-model/                 ← submodule（外部リポジトリのコード/データ）
 
 data/                        ← DVC管理（成果物側）
-  raw/                       ← ソースデータ（ステージ生成物ではない）
-    motion/                  ← 計測機器からの生データ等
-    calibration.csv
   stages/                    ← ステージ出力。stages/ をミラー
     import/
       raw_motion/
@@ -51,10 +48,11 @@ data/                        ← DVC管理（成果物側）
     normalize/
       timeseries.parquet
       ...
-  external/                  ← 外部staqkitリポジトリからのimportデータ
-    <source>/
-      <stage>/
-        ...
+  external/                  ← DAG 外のソース（どのステージも生成しない）
+    raw/                     ← ローカル生データ（計測機器からの出力等）
+      motion/
+      calibration.csv
+    <repo>/                  ← 別リポジトリから dvc import したデータ
 ```
 
 ## 分離の根拠
@@ -62,6 +60,29 @@ data/                        ← DVC管理（成果物側）
 - **管理境界の明確化**: コード・設定はGit、データ成果物はDVC。混在ディレクトリだと `.gitignore` / `.dvcignore` が煩雑
 - **クリーンビルド**: `data/stages/` を丸ごと削除 → `dvc repro` で再生成が自然に可能
 - **dvc.yamlの位置づけ**: `stages/*/stage.yaml` 群から動的生成される派生物。stage.yaml がSSoT
+
+## 固定パスと参考配置
+
+構成図のパスは2種に分かれる。staqkit が場所・名前を前提に走査・導出するものは固定であり、それ以外は staqkit が宣言されたパスを解決するだけで配置を強制しない。
+
+### 固定パス（規約契約）
+
+staqkit が走査・ミラー・呼び出しの起点とするため、配置と名前を規約として固定する。
+
+- `stages/` と各ステージの `stage.yaml` / `run.py`: ステージ発見は `stages/**/stage.yaml` の再帰走査、実行は `python stages/<stage>/run.py`。ディレクトリ名・ファイル名で位置と入口が決まる。
+- `config/table_schemas/` と配下の `*.yaml`: スキーマ発見は `config/table_schemas/**/*.yaml` の再帰走査。テーブル名はファイルステムで決まる。
+- `data/stages/<stage>/`: 出力先をステージ名から機械的に導出する（`stages/` のミラー）。
+
+プロジェクト全体設定（`validation` 等）の置き場・既定値は [#26](https://github.com/sakashita44/staqkit/issues/26) で確定する。
+
+### 参考配置
+
+staqkit は `extra_deps` や params 束縛が宣言したパスをリポジトリルート相対で解決するだけで、これらの場所を前提にしない。配置は変更可能であり、構成図が示す位置は一覧性のための参考にすぎない。
+
+- `libs/`: 共有コード。`extra_deps` が任意パスで宣言する（[libs](#libs共有コード)）。
+- params ファイル（`params/` 等）: stage.yaml の束縛が指すパスを解決する（[params](#paramsパラメータ値)）。
+- `data/external/`: DAG にとって外部のソース（どのステージも生成せず、取り込みステージが消費する）。ローカル生データも別リポジトリからの dvc import も同一カテゴリで、来歴強度のみが異なる（[external-data.md](components/external-data.md)）。
+- ステージ直下の `README.md`: アルゴリズム説明。staqkit は要求も走査もしない。
 
 ## ネストディレクトリ
 
@@ -94,5 +115,5 @@ data/                        ← DVC管理（成果物側）
 
 パラメータの値は DVC ネイティブの params ファイル（任意の YAML）に置き、stage.yaml の `params` がローカル名から `{ file, key }` を束縛する（[stage.md](components/stage.md#params外部ファイル参照)）。
 
-- **配置は staqkit が規定しない**。`params/` への集約は一覧性のための推奨運用であり、強制ではない。stage.yaml の束縛が指すパス（リポジトリルート相対）を DVC が読めれば、配置はどこでもよい。
+- **配置は staqkit が規定しない**。`params/` への集約は一覧性のための参考配置であり、強制ではない。stage.yaml の束縛が指すパス（リポジトリルート相対）を DVC が読めれば、配置はどこでもよい。
 - staqkit が前提とするのは「束縛に書かれたパスをリポジトリルート相対で解決する」一点のみ。ステージごとの相対パスは生じない。

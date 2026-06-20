@@ -101,7 +101,7 @@
 - **対応要求**: 派生（リポジトリ境界を越えた合成）
 - **典型操作**:
     1. 新リポジトリを作成（→ A1）
-    1. 親プロジェクトのデータを `staqkit import` で取り込む（→ C2）
+    1. 親プロジェクトのデータを `dvc import` で取り込む（→ C2）
     1. 新規解析を追加（→ B1）
 - **実現区分**: CLI + Pattern
 - **補足**: 親が複数（2つ以上の親プロジェクトを持つ立ち上げ）も本シナリオに含む。`dvc import` の標準パターンで親毎に取り込むだけで成立する。テンプレートコピー（親の構造を初期値としてコピーする形）は派生ではなく A4（引き継ぎ受け取り側）と等価のため本シナリオには含めない。取り込んだ親データは生データ同様のソース扱いとし、取り込みステージ（`--template ingest`）で自プロジェクトのスキーマに従って DataStore に統合する（→ C2 補足、[external-data.md](components/external-data.md)）。スキーマ転送は不要。
@@ -356,8 +356,8 @@
 
 - **目的**: 他プロジェクトの解析結果を入力ノードとして利用する
 - **対応要求**: 派生（リポジトリ境界を越えた合成）
-- **典型操作**: `staqkit import --repo <url> --stages <list>` で取り込み（→ external-data.md）
-- **実現区分**: CLI
+- **典型操作**: `dvc import <url> <path>` で取り込み（→ external-data.md）
+- **実現区分**: Git+DVC
 - **補足**: 取り込んだデータは DataStore へ直接は載せず、生データ同様のソースとして扱う。下流の取り込みステージ（`staqkit add-stage --template ingest`）が `extra_deps` でファイルとして読み、加工結果を自プロジェクトの `config/table_schemas/` に従って DataStore に登録する（→ [external-data.md](components/external-data.md)「ソースとしての扱い」）。`dvc import` で table_schemas を伝達する必要はなく、追跡性は import の `repo.url` + `rev_lock` が担保する。A6 親プロジェクト参照立ち上げも同じ扱い
 
 #### C2a. 取り込みノードの来歴を出典元 DAG まで追跡する
@@ -369,13 +369,13 @@
     1. 出典元リポジトリを別途 clone（`git clone --branch <hash>` 等）
     1. clone 先で通常の `staqkit provenance` を実行
 - **実現区分**: Git+DVC + Pattern
-- **補足**: `dvc import` が記録する `rev_lock` + `repo.url` がスナップショット参照として機能する。staqkit 側の追加ラップは不要。staqkit の責務は「参照を辿れる構造を保証する」ことに留まり、辿る操作自体はユーザが Git で行う（→ external-data.md「追跡性」）。`staqkit import` 時に出典元の来歴を自リポへ同梱する仕様は持たない。出典元を clone すれば、その `dvc.lock` + git 履歴から通常どおり来歴を導出でき、DVC remote へのアクセスは不要（→ stage.md「来歴の所在」）
+- **補足**: `dvc import` が記録する `rev_lock` + `repo.url` がスナップショット参照として機能する。staqkit 側の追加ラップは不要。staqkit の責務は「参照を辿れる構造を保証する」ことに留まり、辿る操作自体はユーザが Git で行う（→ external-data.md「追跡性」）。`dvc import` が出典元の来歴を自リポへ同梱する仕様は持たない。出典元を clone すれば、その `dvc.lock` + git 履歴から通常どおり来歴を導出でき、DVC remote へのアクセスは不要（→ stage.md「来歴の所在」）
 
 #### C2b. 取り込み元 DAG の更新を反映する
 
 - **目的**: 出典元リポジトリの最新版を自プロジェクトに取り込み直す
 - **対応要求**: 派生（リポジトリ境界を越えた合成）
-- **典型操作**: `dvc update data/external/<source>/<stage>/` で一括更新
+- **典型操作**: `dvc update <path>` で取り込み先を更新
 - **実現区分**: Git+DVC
 - **補足**: external-data.md「取り込み」で `dvc update` による明示的追従が方針として確定。更新検知の自動化は現状未対応（手動判断）
 

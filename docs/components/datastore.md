@@ -460,7 +460,7 @@ Protocol は VIEW ベースを前提とする。TABLE 対応は将来のパフ�
 
 ## 外部データアクセス
 
-外部リポジトリから取り込んだデータ（`data/external/<source>/<stage>/`）は DataStore へ直接は載せない。生データ（`data/raw/`）と同じく**ソース**として扱い、下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[external-data.md](../external-data.md)）。これにより DataStore は外部由来かどうかを一切知らずに済み、外部スキーマを転送・解釈する仕組みも不要になる。取り込みステージを通さず外部データを直接クエリすることは想定しない。
+外部リポジトリから取り込んだデータ（`data/external/<repo>/`）は DataStore へ直接は載せない。ローカル生データと同じくソースとして扱い、下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[external-data.md](../external-data.md)）。これにより DataStore は外部由来かどうかを一切知らずに済み、外部スキーマを転送・解釈する仕組みも不要になる。取り込みステージを通さず外部データを直接クエリすることは想定しない。
 
 ### 非 Parquet データの発見
 
