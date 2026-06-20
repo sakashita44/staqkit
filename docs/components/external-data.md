@@ -10,7 +10,7 @@
 
 ## ソースとしての扱い
 
-取り込んだデータは DataStore へ直接は載せず、生データ（`data/raw/`）と同じく**ソース**として扱う。下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#extra_deps-dag外の外部依存)）。
+取り込んだデータは DataStore へ直接は載せず、ローカル生データと同じくソースとして扱う。下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#extra_deps-dag外の外部依存)）。
 
 - 取り込みステージは `extra_deps` のソースを読み、run.py で `data/stages/<stage>/` 配下（＝当該ステージの outs）へ書き出す。非 Parquet 出力をそのまま管理下に置く場合は `run.py` で `shutil.copy` し、コピー先を `add_datastore: false` の out として宣言、パスを格納した sidecar parquet（`add_datastore: true`）を併設すると DataStore から発見できる。加工して Parquet 化する場合は `store.write_table` で `add_datastore: true` の out を書く。`staqkit add-stage --template ingest` がこの定型を生成する。
 - DataStore に入るデータは必ずそのプロジェクト自身がスキーマ契約を宣言する。これは生データ取り込みと同一の原則であり、外部だけの特例ではない。上流の公開スキーマ（標準構造そのものが外部 IF）はステージ著者が定義を書くときに参照する。
@@ -27,12 +27,16 @@
 
 ## 配置構造
 
+DAG にとって外部のソース（どのステージも生成せず、取り込みステージが消費するだけのデータ）は `data/external/` にまとめる。staqkit は `extra_deps` が宣言したパスを解決するだけで配置を強制しないため、これは一覧性のための参考配置である。
+
 ```text
-data/external/<source>/<stage>/   ← 上流の data/stages/<stage>/ をミラー
+data/external/
+  raw/          ← ローカル生データ（dvc add）
+  <repo>/       ← 別リポジトリから dvc import したデータ
 ```
 
-- `staqkit import --repo <url> --stages <list>` でステージ単位の一括取得
-- `dvc update data/external/` で一括更新
+- 取り込み: `dvc import <url> <path>` でリーフ（使いたいデータ）をコピーし、`.dvc` に `repo.url` + `rev_lock` を記録する
+- 更新: `dvc update <path>` で上流追従
 
 ## 上流の公開IF
 
