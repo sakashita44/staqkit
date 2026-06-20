@@ -41,7 +41,3 @@ staqkit の標準構造（`stages/*`, `config/`, `data/stages/*`）自体が外�
 ## 関連
 
 - CLI 実行困難な外部ツール処理の登録ステージパターン: [#6](https://github.com/sakashita44/staqkit/issues/6)
-
-## リモートアクセスツール（TODO）
-
-`staqkit remote` コマンド群でリモートリポジトリのデータ参照・取得を提供する。実装手段は gh CLI または GitHub API を想定。private リポジトリにも対応。

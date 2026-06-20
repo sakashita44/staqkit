@@ -6,7 +6,6 @@
 
 ```text
 config/                      ← Git管理（プロジェクト設定）
-  project.yaml
   table_schemas/             ← テーブルごとのスキーマ定義（サブディレクトリ許容）
     timeseries.yaml
     record.yaml
