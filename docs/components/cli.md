@@ -38,7 +38,7 @@ staqkit add-stage <path> [--status <active|planned|inactive>] [--template <defau
 
 新しいステージのディレクトリ（`stages/<path>/`）に stage.yaml と run.py のボイラープレートを生成する。プロジェクト全体の初期化は Copier が担い、本コマンドは既存プロジェクト内へのステージ追加に専念する（[distribution.md](../distribution.md#初期化とステージ追加の責務分担)）。
 
-- `--status`: 初期状態（既定: planned。設計ファースト＝実体に先立つ宣言と整合）。
+- `--status`: 初期状態（既定: planned。宣言の先行＝実体に先立つ宣言と整合）。
 - `--template`: run.py 雛形の種別。`default` は通常ステージ（`store.query` → 加工 → `store.write_table`）、`ingest` は生データ・外部 import データをソースとして取り込む取り込みステージ（`extra_deps` でソースを受け、非 Parquet 出力は `add_datastore: false`、パスを格納した sidecar parquet で DataStore から発見可能にする。[external-data.md](external-data.md)、[#6](https://github.com/sakashita44/staqkit/issues/6)）。
 - 既存ステージ（同一パス）と重複する場合はエラー終了する。
 
