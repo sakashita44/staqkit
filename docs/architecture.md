@@ -67,6 +67,12 @@ ProjectLayout は frozen dataclass であり、プロジェクトルートから
 
 テスト時は `ProjectLayout(root=tmp_path)` を与えることで、実ディレクトリに依存せず組み立て・パス解決を検証できる。
 
+### ProjectConfig
+
+プロジェクト全体の振る舞い設定（`validation` の各検証レベル）は ProjectConfig が保持する。パス規約を持つ ProjectLayout とは別オブジェクトとし、ProjectLayout はパスのみ、ProjectConfig は設定値のみを担う。
+
+Project 層が `config/project.yaml` を読み込み、欠落キーを既定値で補完して ProjectConfig を組み立てる（置き場と既定値は [directory-layout.md](directory-layout.md#プロジェクト全体設定)）。組み立て経路（run_stage / スコープ解決ファクトリ）が ProjectConfig を受け取り、その値で DataStore の検証レベルを決定する。`config/project.yaml` 不在のプロジェクトは既定値のみで成立する。
+
 ### エンジン差し替え性の二分割
 
 差し替え性は二つの異なるものに分けて扱う。
@@ -96,10 +102,10 @@ ProjectLayout は frozen dataclass であり、プロジェクトルートから
 
 ### staqkit 固定 vs プロジェクト設定
 
-| 区分             | 内容                                                                                                                                                                                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| staqkit 固定     | [outs 統一スキーマ](components/stage.md#outs-統一スキーマ)（path + add_datastore）、[分散テーブル統合](components/stage.md#分散テーブルの統合)（UNION ALL + DDL 制約検証）、stage の概念、DuckDB over files クエリエンジン、DataStore クラスの query IF |
-| プロジェクト設定 | [テーブルスキーマ定義](components/datastore.md#テーブル結合のスキーマ契約)（config/table_schemas/、PK/FK で識別軸の階層構造を表現）、stage 名、ファイル配置規約                                                                                         |
+| 区分             | 内容                                                                                                                                                                                                                                                             |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| staqkit 固定     | [outs 統一スキーマ](components/stage.md#outs-統一スキーマ)（path + add_datastore）、[分散テーブル統合](components/stage.md#分散テーブルの統合)（UNION ALL + DDL 制約検証）、stage の概念、DuckDB over files クエリエンジン、DataStore クラスの query IF          |
+| プロジェクト設定 | [テーブルスキーマ定義](components/datastore.md#テーブル結合のスキーマ契約)（config/table_schemas/、PK/FK で識別軸の階層構造を表現）、stage 名、ファイル配置規約、[検証レベル](directory-layout.md#プロジェクト全体設定)（`config/project.yaml` の `validation`） |
 
 ### 不変性の保証
 

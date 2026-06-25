@@ -375,4 +375,4 @@ run_stage のエピローグで実施する検証。
 | 未宣言ファイル（actual − declared）      | run_stage エピローグ  | ステージ実行後 → 警告（config で例外昇格可能） |
 
 - エピローグの例外は Python プロセスの非ゼロ終了コードとなり、DVC がステージ失敗と判定してパイプラインを停止する
-- 未宣言ファイルの扱いは `validation: post_run: strict|warn|off` で制御
+- 未宣言ファイルの扱いは `config/project.yaml` の `validation.post_run`（`strict|warn|off`、既定 `warn`）で制御する（[directory-layout.md](../directory-layout.md#プロジェクト全体設定)）

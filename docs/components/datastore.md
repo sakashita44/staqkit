@@ -369,11 +369,15 @@ DDL を `sqlglot` 等でパースし、制約定義を抽出。対象データ�
 
 ### 検証レベル（config で制御）
 
+検証レベルは `config/project.yaml` の `validation` で制御する（[directory-layout.md](../directory-layout.md#プロジェクト全体設定)）。
+
 ```yaml
 validation:
-    on_read: constraint | schema | off
-    on_write: constraint | off
+    on_read: schema # constraint | schema | off（既定 schema）
+    on_write: constraint # constraint | off（既定 constraint）
 ```
+
+既定値は `on_read: schema` / `on_write: constraint`。設定不在時はこの既定で動作する。`on_read` の既定を `schema` とするのは、write 時に `constraint` で検証済みのデータを読むため、読み込み時の制約再検査は冗長であり、メタデータのみで済む DDL ドリフト・UNION 互換性の検査に留めるため。`constraint` は write_table を通らないデータ（手編集・外部取り込み）の制約違反を毎読み込みで検出する。同等の検査はリポジトリ横断の `staqkit validate` でもオンデマンドに実行できる。
 
 **読み込み時**（DataStore 組み立て時）:
 

@@ -6,6 +6,7 @@
 
 ```text
 config/                      ← Git管理（プロジェクト設定）
+  project.yaml               ← プロジェクト全体設定（validation 等）
   table_schemas/             ← テーブルごとのスキーマ定義（サブディレクトリ許容）
     timeseries.yaml
     record.yaml
@@ -72,8 +73,7 @@ staqkit が走査・ミラー・呼び出しの起点とするため、配置と
 - `stages/` と各ステージの `stage.yaml` / `run.py`: ステージ発見は `stages/**/stage.yaml` の再帰走査、実行は `python stages/<stage>/run.py`。ディレクトリ名・ファイル名で位置と入口が決まる。
 - `config/table_schemas/` と配下の `*.yaml`: スキーマ発見は `config/table_schemas/**/*.yaml` の再帰走査。テーブル名はファイルステムで決まる。
 - `data/stages/<stage>/`: 出力先をステージ名から機械的に導出する（`stages/` のミラー）。
-
-プロジェクト全体設定（`validation` 等）の置き場・既定値は [#26](https://github.com/sakashita44/staqkit/issues/26) で確定する。
+- `config/project.yaml`: プロジェクト全体設定（`validation` 等）の置き場（[プロジェクト全体設定](#プロジェクト全体設定)）。
 
 ### 参考配置
 
@@ -83,6 +83,22 @@ staqkit は `extra_deps` や params 束縛が宣言したパスをリポジト�
 - params ファイル（`params/` 等）: stage.yaml の束縛が指すパスを解決する（[params](#paramsパラメータ値)）。
 - `data/external/`: DAG にとって外部のソース（どのステージも生成せず、取り込みステージが消費する）。ローカル生データも別リポジトリからの dvc import も同一カテゴリで、来歴強度のみが異なる（[external-data.md](components/external-data.md)）。
 - ステージ直下の `README.md`: アルゴリズム説明。staqkit は要求も走査もしない。
+
+## プロジェクト全体設定
+
+プロジェクト全体の振る舞い設定は `config/project.yaml` に置く。
+
+```yaml
+validation:
+    on_read: schema # constraint | schema | off
+    on_write: constraint # constraint | off
+    post_run: warn # strict | warn | off
+```
+
+- `validation.on_read` / `on_write`: DataStore の読み込み・書き込み時の検証レベル（[datastore.md](components/datastore.md#検証レベルconfig-で制御)）。
+- `validation.post_run`: run_stage エピローグでの未宣言ファイルの扱い（[stage.md](components/stage.md#post-run-検証)）。
+
+各キーの既定値は `on_read: schema` / `on_write: constraint` / `post_run: warn`。`config/project.yaml` 自体や個別キーが不在のプロジェクトは、すべて既定値で動作する。
 
 ## ネストディレクトリ
 
