@@ -95,7 +95,7 @@ validation:
     post_run: warn # strict | warn | off
 ```
 
-- `validation.on_read` / `on_write`: DataStore の読み込み・書き込み時の検証レベル（[datastore.md](components/datastore.md#検証レベルconfig-で制御)）。
+- `validation.on_read` / `on_write`: DataStore の読み込み・書き込み時の検証レベル（[datastore.md](components/datastore.md#検証レベル)）。
 - `validation.post_run`: run_stage エピローグでの未宣言ファイルの扱い（[stage.md](components/stage.md#post-run-検証)）。
 
 各キーの既定値は `on_read: schema` / `on_write: constraint` / `post_run: warn`。`config/project.yaml` 自体や個別キーが不在のプロジェクトは、すべて既定値で動作する。
@@ -131,5 +131,5 @@ validation:
 
 パラメータの値は DVC ネイティブの params ファイル（任意の YAML）に置き、stage.yaml の `params` がローカル名から `{ file, key }` を束縛する（[stage.md](components/stage.md#params外部ファイル参照)）。
 
-- **配置は staqkit が規定しない**。`params/` への集約は一覧性のための参考配置であり、強制ではない。stage.yaml の束縛が指すパス（リポジトリルート相対）を DVC が読めれば、配置はどこでもよい。
+- 配置は staqkit が規定しない。`params/` への集約は一覧性のための参考配置であり、強制ではない。stage.yaml の束縛が指すパス（リポジトリルート相対）を DVC が読めれば、配置はどこでもよい。
 - staqkit が前提とするのは「束縛に書かれたパスをリポジトリルート相対で解決する」一点のみ。ステージごとの相対パスは生じない。

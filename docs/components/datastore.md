@@ -367,7 +367,7 @@ column_descriptions:
 
 DDL を `sqlglot` 等でパースし、制約定義を抽出。対象データに対して検証クエリを実行する。DDL の表現力がそのまま検証の表現力になるため、エンジン固有の CHECK 式も同一エンジンで検査できる。
 
-### 検証レベル（config で制御）
+### 検証レベル
 
 検証レベルは `config/project.yaml` の `validation` で制御する（[directory-layout.md](../directory-layout.md#プロジェクト全体設定)）。
 
@@ -377,15 +377,19 @@ validation:
     on_write: constraint # constraint | off（既定 constraint）
 ```
 
-既定値は `on_read: schema` / `on_write: constraint`。設定不在時はこの既定で動作する。`on_read` の既定を `schema` とするのは、write 時に `constraint` で検証済みのデータを読むため、読み込み時の制約再検査は冗長であり、メタデータのみで済む DDL ドリフト・UNION 互換性の検査に留めるため。`constraint` は write_table を通らないデータ（手編集・外部取り込み）の制約違反を毎読み込みで検出する。同等の検査はリポジトリ横断の `staqkit validate` でもオンデマンドに実行できる。
+既定値は `on_read: schema` / `on_write: constraint`。設定不在時はこの既定で動作する。`constraint` は write_table を通らないデータ（手編集・外部取り込み）の制約違反を毎読み込みで検出する。同等の検査はリポジトリ横断の `staqkit validate` でもオンデマンドに実行できる。
 
-**読み込み時**（DataStore 組み立て時）:
+#### 読み込み時
+
+DataStore 組み立て時に適用する。
 
 - `off`: 検証なし
 - `schema`: カラム名・型が DDL と一致するか + ステージ間 UNION ALL 互換性（メタデータのみ、全行スキャン不要）
 - `constraint`: schema に加え NOT NULL / PK / UNIQUE / CHECK / FK を全行スキャンで検証
 
-**書き込み時**（write_table）:
+#### 書き込み時
+
+write_table 実行時に適用する。
 
 - `off`: 検証なし
 - `constraint`: カラム名・型 + 全制約検証。PK 重複・FK は既存 VIEW に対する JOIN で検証
