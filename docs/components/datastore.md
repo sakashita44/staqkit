@@ -373,11 +373,11 @@ DDL を `sqlglot` 等でパースし、制約定義を抽出。対象データ�
 
 ```yaml
 validation:
-    on_read: schema # constraint | schema | off（既定 schema）
-    on_write: constraint # constraint | off（既定 constraint）
+    on_read: schema # constraint | schema | off
+    on_write: constraint # constraint | off
 ```
 
-既定値は `on_read: schema` / `on_write: constraint`。設定不在時はこの既定で動作する。`constraint` は write_table を通らないデータ（手編集・外部取り込み）の制約違反を毎読み込みで検出する。同等の検査はリポジトリ横断の `staqkit validate` でもオンデマンドに実行できる。
+各キーの既定値と設定不在時の挙動は [directory-layout.md](../directory-layout.md#プロジェクト全体設定) に従う。`constraint` は write_table を通らないデータ（手編集・外部取り込み）の制約違反を毎読み込みで検出する。同等の検査はリポジトリ横断の `staqkit validate` でもオンデマンドに実行できる。
 
 #### 読み込み時
 

@@ -367,12 +367,12 @@ if __name__ == "__main__":
 
 run_stage のエピローグで実施する検証。
 
-| 検証項目                                 | 担当                  | タイミング                                     |
-| ---------------------------------------- | --------------------- | ---------------------------------------------- |
-| outs の変更追跡（ハッシュベース）        | DVC                   | dvc repro / dvc status                         |
-| スキーマ整合性（カラム構成 vs DDL 定義） | DataStore write_table | 書き込み時（on_write バリデーション）          |
-| 未生成ファイル（declared − actual）      | run_stage エピローグ  | ステージ実行後 → 例外 → DVC 停止               |
-| 未宣言ファイル（actual − declared）      | run_stage エピローグ  | ステージ実行後 → 警告（config で例外昇格可能） |
+| 検証項目                                 | 担当                  | タイミング                                       |
+| ---------------------------------------- | --------------------- | ------------------------------------------------ |
+| outs の変更追跡（ハッシュベース）        | DVC                   | dvc repro / dvc status                           |
+| スキーマ整合性（カラム構成 vs DDL 定義） | DataStore write_table | 書き込み時（on_write バリデーション）            |
+| 未生成ファイル（declared − actual）      | run_stage エピローグ  | ステージ実行後 → 例外 → DVC 停止                 |
+| 未宣言ファイル（actual − declared）      | run_stage エピローグ  | ステージ実行後 → 警告（post_run で例外昇格可能） |
 
 - エピローグの例外は Python プロセスの非ゼロ終了コードとなり、DVC がステージ失敗と判定してパイプラインを停止する
-- 未宣言ファイルの扱いは `config/project.yaml` の `validation.post_run`（`strict|warn|off`、既定 `warn`）で制御する（[directory-layout.md](../directory-layout.md#プロジェクト全体設定)）
+- 未宣言ファイルの扱いは `config/project.yaml` の `validation.post_run`（`strict|warn|off`）で制御する。既定値は [directory-layout.md](../directory-layout.md#プロジェクト全体設定) に従う
