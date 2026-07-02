@@ -58,7 +58,7 @@ staqkit の利用シナリオを体系化し、CLI 体系・Project 層の組み
     1. table_schemas を既存データから逆算して定義
     1. `staqkit validate` で整合確認
 - **実現区分**: CLI + Pattern
-- **補足**: **(TODO)** 「部分導入」を許す段階的移行パターンの整理が必要。validate が「全部 staqkit 化されていない状態」を許容するかが論点
+- **補足**: validate は宣言範囲（stage.yaml の `outs`・参照する table_schemas 等）のみを検査し、宣言していない同居ファイルは対象外となる（staqkit システムから不可視で、生のファイルパス経由でのみ読める）。部分導入は宣言した量の差であり、宣言範囲の validate error を解消すればその範囲で staqkit の保証を得る（→ [components/cli.md](components/cli.md#staqkit-validate)）
 
 ### A3. プロジェクトを引き継ぐ（受け渡し側）
 
@@ -603,7 +603,6 @@ DAG の辺（処理）の再利用。requirements.md では核要求から派生
 
 | ID     | 内容                                                                 | 関連 issue |
 | ------ | -------------------------------------------------------------------- | ---------- |
-| A2     | 部分導入を許す段階的移行パターン                                     | #29        |
 | B17    | 結果比較支援を staqkit が薄く提供する価値があるか                    | #28        |
 | D3     | status の出力フォーマット拡張（planned/inactive 表示等）の要否       | #28        |
 | D4     | スナップショット再現性確認の専用フラグ要否                           | #28        |
