@@ -247,6 +247,14 @@ staqkit clean --remove     # 確認の上、実際に削除
 - `data/stages/xxx/` が存在するが対応する `stage.yaml` がない → 孤児
 - `data/stages/xxx/` が存在し、status が inactive → 休止中データ
 
+### ステージの削除
+
+ステージの永久削除は、下流の参照を先に解消してから行う。
+
+- 下流が `source_stage` で当該ステージを参照したまま削除すると、参照整合性検査が参照先不在を検出してエラーになる（警告のみで通す緩和経路は設けない）
+- 手順: 下流ステージの inputs から当該参照を除く（または代替ソースへ繋ぎ替える）→ `stages/xxx/`・`data/stages/xxx/` を削除 → `staqkit clean` で残る孤児データを整理
+- 可逆な休止が目的なら削除でなく inactive を用いる（[inactive 伝搬](#inactive-伝搬と-suppressed-状態)。上流を active に戻せば下流も自動復帰する）
+
 ## ステージ出力の構成
 
 各DVCステージは `data/stages/xxx/` 配下にファイルを出力する。`add_datastore: true` のファイルは DataStore の VIEW に統合される。1ステージが複数テーブルを出力可能。
