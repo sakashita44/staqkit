@@ -57,7 +57,7 @@ staqkit validate --target descriptions # description 網羅検査のみ
 
 引数なしで横断的なフルチェックを実行する。全検査群を回す `staqkit validate` が保証の本体であり、A3（引き継ぎ）・A5（公開）のゲートはこれに依存する。`--target` は編集ループ中に「いま触っている部分だけ」を回すための便宜フィルタであり、検査群の網羅的な列挙でも硬い契約でもない。検査群が増えても、単独実行したい編集ループの局面がある場合にだけ既存のいずれかへ寄せ、なければフル実行に委ねる。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
 
-検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない同居ファイルは staqkit から不可視で、生のファイルパス経由でのみ読める。`outs` に `add_datastore: true` で宣言した出力はスキーマ検査対象となり、対応する table_schema がなければ error となる。`add_datastore: false` の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
+検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない同居ファイルは staqkit から不可視で、生のファイルパス経由でのみ読める。`outs` に `add_datastore: true` で宣言した出力はスキーマ検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければ error となる。`add_datastore: false` の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
 
 - 参照整合性（source_stage の実在確認・循環検出、params 束縛先 `file`・`key` の実在確認）: `--target references`
 - スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
