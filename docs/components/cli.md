@@ -10,7 +10,7 @@
 staqkit repro [stage]
 ```
 
-stage.yaml 群から dvc.yaml を動的生成 → 最小限バリデーション → `dvc repro` を実行する。stage を指定すると対象ステージとその上流のみ再実行する。
+stage.yaml 群から dvc.yaml を再生成 → 最小限バリデーション → `dvc repro` を実行する。再生成された dvc.yaml と、実行で更新された dvc.lock のみが `git add` される（[pipeline-gen.md](pipeline-gen.md#整合性の維持)）。stage を指定すると対象ステージとその上流のみ再実行する。
 
 ### staqkit status
 
@@ -18,7 +18,7 @@ stage.yaml 群から dvc.yaml を動的生成 → 最小限バリデーション
 staqkit status
 ```
 
-stage.yaml 群から dvc.yaml を動的生成 → `dvc status` を実行し、各ステージの鮮度を表示する。
+stage.yaml 群から dvc.yaml を再生成 → `dvc status` を実行し、各ステージの鮮度を表示する。再生成で dvc.yaml が変化した場合はその旨を出力に含める。git index には触れない（[pipeline-gen.md](pipeline-gen.md#整合性の維持)）。
 
 ### staqkit dag
 
@@ -38,6 +38,7 @@ staqkit add-stage <path> [--status <active|planned|inactive>] [--template <defau
 
 新しいステージのディレクトリ（`stages/<path>/`）に stage.yaml と run.py のボイラープレートを生成する。プロジェクト全体の初期化は Copier が担い、本コマンドは既存プロジェクト内へのステージ追加に専念する（[distribution.md](../distribution.md#初期化とステージ追加の責務分担)）。
 
+- 生成後に dvc.yaml を再生成する。`git add` の対象は新規ステージ配下の生成物（stage.yaml・run.py）と dvc.yaml のみ（[pipeline-gen.md](pipeline-gen.md#整合性の維持)）。
 - `--status`: 初期状態（既定: planned。宣言の先行＝実体に先立つ宣言と整合）。
 - `--template`: run.py 雛形の種別。`default` は通常ステージ（`store.query` → 加工 → `store.write_table`）、`ingest` は生データ・外部 import データをソースとして取り込む取り込みステージ（`extra_deps` でソースを受け、非 Parquet 出力は `add_datastore: false`、パスを格納した sidecar parquet で DataStore から発見可能にする。[external-data.md](external-data.md)、[#6](https://github.com/sakashita44/staqkit/issues/6)）。
 - 既存ステージ（同一パス）と重複する場合はエラー終了する。
@@ -62,6 +63,8 @@ staqkit validate --target descriptions # description 網羅検査のみ
 - 参照整合性（source_stage の実在確認・循環検出、params 束縛先 `file`・`key` の実在確認）: `--target references`
 - スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
 - description 網羅検査（説明欄充足・説明系ファイル存在）と column_descriptions 未記述の警告: `--target descriptions`
+
+宣言範囲の検査とは別に、フル実行は派生物の整合検査を一つ含む。パイプライン定義整合（dvc.yaml が stage.yaml 群からの生成結果と意味的に一致すること。[pipeline-gen.md](pipeline-gen.md#整合性の維持)）は宣言の中身ではなく生成物と宣言の同期を検査するもので、編集ループで単独実行する局面がないため `--target` の個別枠は設けない。
 
 validate error は runtime が強制する契約に対応する。validate は宣言範囲を先回りで一括検査し、runtime（`staqkit repro`・DataStore の読み書き）は実行・アクセスした範囲だけを硬く強制する。両者は独立したゲートであり、validate の通過は runtime の前提条件ではない。参照整合性は pipeline-gen と repro、スキーマ契約は DataStore の読み書きで同じ契約が再強制され、description 網羅検査は runtime に波及せず A3・A5 のゲート向けの警告に留まる。設計時と実行時のこの粒度差は[アクセス経路の保証グラデーション](../architecture.md#守る契約とアクセス経路の保証グラデーション)に従う。
 

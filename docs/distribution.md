@@ -20,7 +20,7 @@ staqkit は単一の Python パッケージとして配布する。
 配布の対象を性質の異なる二つに分ける。
 
 - **staqkit 本体（ツール・ランタイムのコード）**: 通常の Python パッケージ。改善の取り込みは `uv lock --upgrade` でのバージョン更新で完了する。
-- **プロジェクト雛形（各リポジトリにファイルとして焼かれる初期構成）**: CI 設定、`.gitignore` / `.dvcignore`、stage.yaml のサンプル、空のディレクトリ枠など。
+- **プロジェクト雛形（各リポジトリにファイルとして焼かれる初期構成）**: CI 設定、pre-commit 設定、`.gitignore` / `.dvcignore`、stage.yaml のサンプル、空のディレクトリ枠など。pre-commit 設定はコミット時に、CI 設定は push / PR 時に、それぞれ `staqkit validate` を実行して dvc.yaml と stage.yaml の整合検査（[pipeline-gen.md](components/pipeline-gen.md#整合性の維持)）を掛ける。
 
 パッケージのコードはバージョン更新で全プロジェクトに伝播する。生成時に各リポジトリへ焼かれた雛形ファイルは、以後そのリポジトリの一部となり版更新の影響を受けない。この非対称性に沿って、振る舞い（ロジック）は staqkit パッケージに置き、雛形は staqkit パッケージに置けない各プロジェクト固有のボイラープレートに限定する。
 
