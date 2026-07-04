@@ -60,7 +60,7 @@ data/                        ← DVC管理（成果物側）
 
 - **管理境界の明確化**: コード・設定はGit、データ成果物はDVC。混在ディレクトリだと `.gitignore` / `.dvcignore` が煩雑
 - **クリーンビルド**: `data/stages/` を丸ごと削除 → `dvc repro` で再生成が自然に可能
-- **dvc.yamlの位置づけ**: `stages/*/stage.yaml` 群から動的生成される派生物。stage.yaml がSSoT
+- **dvc.yamlの位置づけ**: `stages/*/stage.yaml` 群から生成される派生物で、dvc.lock と対で Git 管理する。stage.yaml がSSoT
 
 ## 固定パスと参考配置
 

@@ -10,7 +10,7 @@
 staqkit repro [stage]
 ```
 
-stage.yaml 群から dvc.yaml を動的生成 → 最小限バリデーション → `dvc repro` を実行する。stage を指定すると対象ステージとその上流のみ再実行する。
+stage.yaml 群から dvc.yaml を再生成 → 最小限バリデーション → `dvc repro` を実行する。再生成された dvc.yaml と、実行で更新された dvc.lock は `git add` される（[pipeline-gen.md](pipeline-gen.md#整合性の維持)）。stage を指定すると対象ステージとその上流のみ再実行する。
 
 ### staqkit status
 
@@ -18,7 +18,7 @@ stage.yaml 群から dvc.yaml を動的生成 → 最小限バリデーション
 staqkit status
 ```
 
-stage.yaml 群から dvc.yaml を動的生成 → `dvc status` を実行し、各ステージの鮮度を表示する。
+stage.yaml 群から dvc.yaml を再生成 → `dvc status` を実行し、各ステージの鮮度を表示する。再生成で dvc.yaml が変化した場合は `git add` される。
 
 ### staqkit dag
 
@@ -38,6 +38,7 @@ staqkit add-stage <path> [--status <active|planned|inactive>] [--template <defau
 
 新しいステージのディレクトリ（`stages/<path>/`）に stage.yaml と run.py のボイラープレートを生成する。プロジェクト全体の初期化は Copier が担い、本コマンドは既存プロジェクト内へのステージ追加に専念する（[distribution.md](../distribution.md#初期化とステージ追加の責務分担)）。
 
+- 生成後に dvc.yaml を再生成し、生成物とともに `git add` する（[pipeline-gen.md](pipeline-gen.md#整合性の維持)）。
 - `--status`: 初期状態（既定: planned。宣言の先行＝実体に先立つ宣言と整合）。
 - `--template`: run.py 雛形の種別。`default` は通常ステージ（`store.query` → 加工 → `store.write_table`）、`ingest` は生データ・外部 import データをソースとして取り込む取り込みステージ（`extra_deps` でソースを受け、非 Parquet 出力は `add_datastore: false`、パスを格納した sidecar parquet で DataStore から発見可能にする。[external-data.md](external-data.md)、[#6](https://github.com/sakashita44/staqkit/issues/6)）。
 - 既存ステージ（同一パス）と重複する場合はエラー終了する。
@@ -59,6 +60,7 @@ staqkit validate --target descriptions # description 網羅検査のみ
 
 検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない同居ファイルは staqkit から不可視で、生のファイルパス経由でのみ読める。`outs` に `add_datastore: true` で宣言した出力はスキーマ検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければ error となる。`add_datastore: false` の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
 
+- パイプライン定義整合（dvc.yaml が stage.yaml 群からの生成結果と意味的に一致。[pipeline-gen.md](pipeline-gen.md#整合性の維持)）: フル実行に含まれる（`--target` の個別枠は設けない）
 - 参照整合性（source_stage の実在確認・循環検出、params 束縛先 `file`・`key` の実在確認）: `--target references`
 - スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
 - description 網羅検査（説明欄充足・説明系ファイル存在）と column_descriptions 未記述の警告: `--target descriptions`

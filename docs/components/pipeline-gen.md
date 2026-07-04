@@ -1,6 +1,6 @@
 # パイプライン生成
 
-dvc.yaml は `stages/*/stage.yaml` 群から動的に生成される派生物であり、Git管理しない。`dvc.lock` のみGit管理。ルートに単一の dvc.yaml を生成する。
+dvc.yaml は `stages/*/stage.yaml` 群から生成される派生物であり、`dvc.lock` と対で Git 管理する。ルートに単一の dvc.yaml を生成する。stage.yaml が SSoT であり、dvc.yaml は手編集の対象としない（再生成で上書きされる）。
 
 `dvc.lock` は各ステージの実行時パラメータ・入出力ハッシュを commit 単位で記録するため、来歴追跡（T1）の源泉も兼ねる。`staqkit provenance` / `staqkit history` は `dvc.lock` と git 履歴からチェーンを導出する（[stage.md](stage.md#来歴の所在)）。
 
@@ -36,16 +36,32 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 
 active ステージが inputs で planned ステージを参照する場合、参照先 outs は dvc.yaml に存在せず実行できない。`staqkit validate` は警告に留め、`staqkit repro` は `ReferenceIntegrityError` で停止する（[stage.md](stage.md#active-が-planned-を参照した場合)）。検査は実行対象（effective-active）にのみ発火するため、planned から planned への参照は対象外。
 
+## 生成の決定性
+
+同一の stage.yaml 群と同一の staqkit バージョンからは、バイト単位で同一の dvc.yaml を生成する。ステージの列挙順・キー順・フォーマットを正規化し、生成に環境依存の要素を含めない。整合検査はこの決定性を前提とする。
+
+## 整合性の維持
+
+stage.yaml と dvc.yaml の同期点を二つ置く。
+
+- 変更時: stage.yaml / dvc.yaml に触れるコマンド（repro / status / add-stage）は dvc.yaml を再生成し、変更があれば `git add` まで行う
+- 利用時: dvc をラップするコマンド（repro / status）は dvc 呼び出しの前に必ず再生成する。dvc が古い dvc.yaml を参照して動く経路を staqkit コマンド上に残さない
+
+`staqkit validate` は dvc.yaml が stage.yaml 群からの生成結果と一致することを検査する。比較はパース後の意味比較（ステージ集合・cmd・deps・params・outs・desc）で行う。バイト比較を避けるのは、staqkit バージョン間のフォーマット差が過去スナップショットの検査で偽陽性になることを防ぐためである。
+
+この構成での整合保証は次のとおり。staqkit コマンドを経由した操作では乖離は発生しない。staqkit を経由しない変更（stage.yaml の手編集後の直接コミット、merge による書き換え等）で乖離したコミットが生じた場合も、任意のスナップショットに対する `staqkit validate` で検出できる。コミット時の自動検査（pre-commit フック）と CI での validate 実行は雛形が提供する（[distribution.md](../distribution.md#雛形と改善の伝播)）。これらの有効化は利用者の設定（`pre-commit install`、ブランチ保護）に依る。
+
 ## バリデーション
 
-| 検査項目                                           | validate（フル） | repro（最小限） |
-| -------------------------------------------------- | ---------------- | --------------- |
-| 参照整合性（source_stage 実在・循環検出）          | YES              | YES             |
-| active が planned を inputs 参照                   | YES（警告）      | YES（エラー）   |
-| extra_deps の glob が 0 件マッチ                   | YES（エラー）    | YES（エラー）   |
-| スキーマ整合性（parquet vs config/table_schemas/） | YES              | ---             |
-| TableSchemaSet 整合性（FK 参照先・型一致）         | YES              | ---             |
-| column_descriptions 未記述                         | YES（警告）      | ---             |
+| 検査項目                                           | validate（フル） | repro（最小限）               |
+| -------------------------------------------------- | ---------------- | ----------------------------- |
+| dvc.yaml と stage.yaml の整合                      | YES              | ---（実行前再生成で常に成立） |
+| 参照整合性（source_stage 実在・循環検出）          | YES              | YES                           |
+| active が planned を inputs 参照                   | YES（警告）      | YES（エラー）                 |
+| extra_deps の glob が 0 件マッチ                   | YES（エラー）    | YES（エラー）                 |
+| スキーマ整合性（parquet vs config/table_schemas/） | YES              | ---                           |
+| TableSchemaSet 整合性（FK 参照先・型一致）         | YES              | ---                           |
+| column_descriptions 未記述                         | YES（警告）      | ---                           |
 
 `staqkit validate` の各検査群は `--target schema|references|descriptions` で個別実行でき、編集ループ中の部分検証に使える（[cli.md](cli.md#staqkit-validate)）。
 

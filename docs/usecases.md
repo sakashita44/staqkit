@@ -437,7 +437,7 @@ staqkit の利用シナリオを体系化し、CLI 体系・Project 層の組み
 - **対応要求**: 委譲（DAG整合性・鮮度）
 - **典型操作**: `staqkit status` を実行
 - **実現区分**: CLI
-- **補足**: dvc.yaml は staqkit 全体として派生物扱いであり Git 非管理（→ [architecture.md](architecture.md) / [components/pipeline-gen.md](components/pipeline-gen.md)）。`staqkit status` は repro 等と同じ生成プロローグを共有した上で `dvc status` を呼ぶラッパーであり、動的生成は本 UC 固有の付加価値ではない。`dvc status` の出力分類のうち changed deps が本 UC の主関心、missing data + changed outs は再現性確認（→ D4）の関心。**(検討中)** planned/inactive の表示や stage 状態併記など、出力フォーマット拡張の要否
+- **補足**: dvc.yaml は stage.yaml 群から生成され Git 管理される派生物（→ [architecture.md](architecture.md) / [components/pipeline-gen.md](components/pipeline-gen.md)）。`staqkit status` は repro 等と同じ再生成プロローグを共有した上で `dvc status` を呼ぶラッパーであり、再生成は本 UC 固有の付加価値ではない。`dvc status` の出力分類のうち changed deps が本 UC の主関心、missing data + changed outs は再現性確認（→ D4）の関心。**(検討中)** planned/inactive の表示や stage 状態併記など、出力フォーマット拡張の要否
 
 ### D4. clone した状態が再現できているか確認する
 
