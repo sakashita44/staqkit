@@ -164,11 +164,7 @@ staqkit 内の状態は一方向の導出関係に従う。stage.yaml の status
 
 dvc.yaml は stage.yaml 群から生成される派生物であり、dvc.lock と対で Git 管理する。DVC は pull / checkout / status の対象列挙を dvc.yaml と `.dvc` ファイル群から行うため、コミットに dvc.yaml が含まれることで、パイプライン outs の復元（`dvc pull` / `dvc checkout`）が素の Git+DVC 操作だけで成立する。DVC ネイティブツール（`dvc dag` 等）も直接使える。
 
-SSoT は stage.yaml に置いたまま、dvc.yaml との整合は生成と検査で維持する（[pipeline-gen.md](components/pipeline-gen.md#整合性の維持)）。
-
-- stage.yaml / dvc.yaml に触れる staqkit コマンドは dvc.yaml を再生成し、変更を `git add` する
-- dvc をラップするコマンド（repro / status）は dvc 呼び出しの前に dvc.yaml を再生成する
-- `staqkit validate` は dvc.yaml が stage.yaml 群からの生成結果と一致することを検査する
+SSoT は stage.yaml に置いたまま、dvc.yaml との整合は変更時・利用時の再生成と `staqkit validate` の整合検査で維持する。同期点・add 対象・検査方式の詳細は [pipeline-gen.md](components/pipeline-gen.md#整合性の維持) に一本化する。
 
 ### 実験追跡
 

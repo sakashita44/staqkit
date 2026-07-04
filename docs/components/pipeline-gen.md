@@ -44,8 +44,8 @@ active ステージが inputs で planned ステージを参照する場合、�
 
 stage.yaml と dvc.yaml の同期点を二つ置く。
 
-- 変更時: stage.yaml / dvc.yaml に触れるコマンド（repro / status / add-stage）は dvc.yaml を再生成し、変更があれば `git add` まで行う
-- 利用時: dvc をラップするコマンド（repro / status）は dvc 呼び出しの前に必ず再生成する。dvc が古い dvc.yaml を参照して動く経路を staqkit コマンド上に残さない
+- 変更時: パイプライン状態を進めるコマンド（repro / add-stage）は dvc.yaml を再生成し、変更があれば `git add` まで行う。add の対象は各コマンドが書き換えたパイプラインファイルに限る（repro は dvc.yaml と dvc.lock、add-stage は dvc.yaml と新規ステージの生成物）
+- 利用時: dvc をラップするコマンド（repro / status）は dvc 呼び出しの前に必ず再生成する。dvc が古い dvc.yaml を参照して動く経路を staqkit コマンド上に残さない。status は再生成で dvc.yaml が変化した場合その旨を出力に含め、`git add` は行わない
 
 `staqkit validate` は dvc.yaml が stage.yaml 群からの生成結果と一致することを検査する。比較はパース後の意味比較（ステージ集合・cmd・deps・params・outs・desc）で行う。バイト比較を避けるのは、staqkit バージョン間のフォーマット差が過去スナップショットの検査で偽陽性になることを防ぐためである。
 
