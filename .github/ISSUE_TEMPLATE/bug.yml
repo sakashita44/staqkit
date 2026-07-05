@@ -1,5 +1,6 @@
 name: バグ報告
 description: 期待と異なる挙動の報告
+title: "[BUG] <簡単な概要>"
 labels: ["bug"]
 body:
     - type: textarea
@@ -18,5 +19,12 @@ body:
       id: reproduce
       attributes:
           label: 再現手順
+      validations:
+          required: false
+    - type: textarea
+      id: environment
+      attributes:
+          label: 環境情報
+          description: OS、言語/ランタイムのバージョンなど
       validations:
           required: false

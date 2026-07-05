@@ -1,5 +1,6 @@
 name: タスク
-description: 機能追加・改善・ドキュメント等
+description: 実施することが決定した作業（機能追加・改善・ドキュメント等）
+title: "[TASK] <簡単な概要>"
 labels: []
 body:
     - type: textarea
@@ -12,10 +13,20 @@ body:
     - type: textarea
       id: deliverables
       attributes:
-          label: 成果物
-          description: 完了条件（チェックリスト推奨）
+          label: 成果物・完了条件
+          description: チェックリスト推奨
       validations:
           required: true
+    - type: dropdown
+      id: priority
+      attributes:
+          label: 優先度
+          options:
+              - "高"
+              - "中"
+              - "低"
+      validations:
+          required: false
     - type: textarea
       id: related
       attributes:

@@ -1,0 +1,28 @@
+name: アイデア
+description: 検討中の提案・アイデアの記録
+title: "[IDEA] <簡単な概要>"
+labels: ["idea"]
+body:
+    - type: input
+      id: summary
+      attributes:
+          label: 概要
+          description: アイデアの簡単な説明
+      validations:
+          required: true
+    - type: textarea
+      id: details
+      attributes:
+          label: 背景・詳細
+          description: 現状の課題、実装イメージ、関連資料など
+      validations:
+          required: true
+    - type: checkboxes
+      id: progress
+      attributes:
+          label: 検討・進捗状況
+          options:
+              - label: アイデアの整理
+              - label: 要件・仕様の検討
+              - label: 実装・テスト
+              - label: ドキュメント整備
