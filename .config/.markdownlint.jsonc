@@ -1,5 +1,5 @@
 {
-  // sard Markdownリント設定
+  // staqkit Markdownリント設定
   // デフォルトは全ルール有効
   "default": true,
   // MD003: 見出しスタイル - ATX形式 (#)
