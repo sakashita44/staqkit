@@ -167,7 +167,7 @@ extra_deps:
 - glob パターンが 0 件マッチの場合はエラー（`ConfigError`）。リテラルパスの不在は DVC が deps 不在として検出するが、glob は展開結果が空になるとジェネレータが何も出力せず DVC からは見えないため、依存欠落を静かに見逃さないよう生成時に検出する
 - ディレクトリ指定はDVCネイティブの挙動（中のファイル全体をハッシュ追跡）
 - dvc.yaml の deps のみに展開。params には含めない
-- 外部リポジトリから取り込んだデータ（`data/external/<repo>/`）も生データと同じくここで宣言し、取り込みステージがソースとして読む（[external-data.md](../external-data.md)）
+- 外部リポジトリから取り込んだデータ（`data/external/<repo>/`）も生データと同じくここで宣言し、取り込みステージがソースとして読む（[external-data.md](external-data.md)）
 
 解析コードからは `stage.extra_dep("<key>")` でパスを解決する。stage.yaml がパス定義のSSoTであり、DVC deps と解析コードの両方が同一の値を参照する。StageInfo・DataStore の定義は[実行モデル](#実行モデル)を参照。
 

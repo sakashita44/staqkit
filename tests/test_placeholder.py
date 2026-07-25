@@ -1,8 +1,8 @@
 """Phase 0 検証用: パッケージインポートテスト。"""
 
-import sard
+import staqkit
 
 
 def test_import() -> None:
-    """sardパッケージがインポートできることを検証する。"""
-    assert sard.__name__ == "sard"
+    """staqkitパッケージがインポートできることを検証する。"""
+    assert staqkit.__name__ == "staqkit"
