@@ -56,7 +56,7 @@ staqkit validate --target references   # 参照整合性のみ
 staqkit validate --target descriptions # description 網羅検査のみ
 ```
 
-引数なしで横断的なフルチェックを実行する。全検査群を回す `staqkit validate` が保証の本体であり、A3（引き継ぎ）・A5（公開）のゲートはこれに依存する。`--target` は編集ループ中に「いま触っている部分だけ」を回すための便宜フィルタであり、検査群の網羅的な列挙でも硬い契約でもない。検査群が増えても、単独実行したい編集ループの局面がある場合にだけ既存のいずれかへ寄せ、なければフル実行に委ねる。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
+引数なしで横断的なフルチェックを実行する。全検査群を回す `staqkit validate` が保証の本体であり、[A3（引き継ぎ）・A5（公開）](https://github.com/sakashita44/staqkit/discussions/50)のゲートはこれに依存する。`--target` は編集ループ中に「いま触っている部分だけ」を回すための便宜フィルタであり、検査群の網羅的な列挙でも硬い契約でもない。検査群が増えても、単独実行したい編集ループの局面がある場合にだけ既存のいずれかへ寄せ、なければフル実行に委ねる。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
 
 検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない同居ファイルは staqkit から不可視で、生のファイルパス経由でのみ読める。`outs` に `add_datastore: true` で宣言した出力はスキーマ検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければ error となる。`add_datastore: false` の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
 
@@ -66,7 +66,7 @@ staqkit validate --target descriptions # description 網羅検査のみ
 
 宣言範囲の検査とは別に、フル実行は派生物の整合検査を一つ含む。パイプライン定義整合（dvc.yaml が stage.yaml 群からの生成結果と意味的に一致すること。[pipeline-gen.md](pipeline-gen.md#整合性の維持)）は宣言の中身ではなく生成物と宣言の同期を検査するもので、編集ループで単独実行する局面がないため `--target` の個別枠は設けない。
 
-validate error は runtime が強制する契約に対応する。validate は宣言範囲を先回りで一括検査し、runtime（`staqkit repro`・DataStore の読み書き）は実行・アクセスした範囲だけを硬く強制する。両者は独立したゲートであり、validate の通過は runtime の前提条件ではない。参照整合性は pipeline-gen と repro、スキーマ契約は DataStore の読み書きで同じ契約が再強制され、description 網羅検査は runtime に波及せず A3・A5 のゲート向けの警告に留まる。設計時と実行時のこの粒度差は[アクセス経路の保証グラデーション](../architecture.md#守る契約とアクセス経路の保証グラデーション)に従う。
+validate error は runtime が強制する契約に対応する。validate は宣言範囲を先回りで一括検査し、runtime（`staqkit repro`・DataStore の読み書き）は実行・アクセスした範囲だけを硬く強制する。両者は独立したゲートであり、validate の通過は runtime の前提条件ではない。参照整合性は pipeline-gen と repro、スキーマ契約は DataStore の読み書きで同じ契約が再強制され、description 網羅検査は runtime に波及せず[A3・A5](https://github.com/sakashita44/staqkit/discussions/50)のゲート向けの警告に留まる。設計時と実行時のこの粒度差は[アクセス経路の保証グラデーション](../architecture.md#守る契約とアクセス経路の保証グラデーション)に従う。
 
 検査群の責務分割の経緯と方針（CLI コマンドを増やさず `--target` フラグで出し分ける判断）は [#19](https://github.com/sakashita44/staqkit/issues/19) で確定済み。キャッチオール検査対象ファイルの具体的列挙など残る詳細は validate 実装時に確定する。
 
