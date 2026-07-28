@@ -28,6 +28,10 @@ staqkit catalog             # テーブルカタログ出力（→ stdout）
 | outs                | stage.yaml の outs の各 path から `data/stages/{name}/{path}` を生成                                                                                                                                                                                                                          |
 | desc                | stage.yaml の desc                                                                                                                                                                                                                                                                            |
 
+## 再実行範囲の粒度
+
+deps に並ぶ上流ステージの全 outs（[導出マッピング](#導出マッピング)）には、下流が読み取らない出力も含まれる。このため、下流が参照しない出力（図・付随ファイル等）のハッシュが変化した場合も下流ステージは無効化され、再実行の対象になる。
+
 ## ステージ包含ルール
 
 - **active**: dvc.yaml に含める

@@ -119,6 +119,8 @@ inputs の役割:
 | DAG の辺の宣言  | source_stage → pipeline-gen が deps を自動導出 |
 | DVC params 追跡 | source_stage の追加・削除で再実行トリガー      |
 
+依存の宣言粒度はステージ単位であり、再実行範囲もこの粒度に従う（[pipeline-gen.md](pipeline-gen.md#再実行範囲の粒度)）。
+
 ### DataStore スコープと status の関係
 
 | status  | inputs                | DataStore スコープ                     | dvc.yaml |
