@@ -4,7 +4,7 @@
 
 ## 概要
 
-staqkit は、規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙依存の外部化と再現性・追跡性の保証を目指す（[distribution.md](distribution.md)）。
+staqkit は、規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙依存の外部化と追跡性の保証を目指す（[distribution.md](distribution.md#概念)）。再現性の中核は Git と DVC へ委譲する（[requirements.md](requirements.md#委譲する関心とツール)）。
 
 実装は2層構成を採る。下層の Core 層はドメイン非依存の汎用部品群とし、上層の Project 層がプロジェクト固有の規約（`stages/`, `config/` 等）を解釈して Core を組み立てる。CLI 層はこの上に乗るエントリポイントとする。
 
