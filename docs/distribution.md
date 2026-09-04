@@ -4,7 +4,7 @@ staqkit の配布形態と改善の伝播を定める。
 
 ## 概念
 
-staqkit は、規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙的な依存を外部化し、再現性と追跡性を構造的に保証することを目指す。利用者は自分の解析リポジトリを staqkit の規約（`stages/`, `config/`, `data/` の構成、stage.yaml、table_schemas の DDL）に沿って構成し、`staqkit` コマンドでそれを検証・実行・調査する。各ステージの run.py は staqkit のランタイム（`run_stage`, `StageInfo`, `DataStore`）を import し、staqkit が文脈を注入する。
+staqkit は、規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙的な依存を外部化し、追跡性を構造的に保証することを目指す。再現性の中核は Git と DVC へ委譲する（[requirements.md](requirements.md#委譲する関心とツール)）。利用者は自分の解析リポジトリを staqkit の規約（`stages/`, `config/`, `data/` の構成、stage.yaml、table_schemas の DDL）に沿って構成し、`staqkit` コマンドでそれを検証・実行・調査する。各ステージの run.py は staqkit のランタイム（`run_stage`, `StageInfo`, `DataStore`）を import し、staqkit が文脈を注入する。
 
 ## 配布
 
