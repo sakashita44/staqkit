@@ -39,16 +39,16 @@ src/staqkit/
 | 層                       | ドメインスキーマへの依存 | 提供する API                                                                                     |
 | ------------------------ | ------------------------ | ------------------------------------------------------------------------------------------------ |
 | Core 層（QueryEngine等） | なし                     | EngineBuilder: `register(name, files)` / `seal()`、QueryEngine: `fetch(sql, params)` / `close()` |
-| Project 層（DataStore）  | あり（設定ファイル経由） | `query(table, filters, columns)` / `fetch(sql, params)` / `write_table(name, df)`                |
+| Project 層（DataStore）  | あり（設定ファイル経由） | `query(table, filters, columns)` / `fetch(sql, params)` / `write_table(output_key, df)`                |
 
 Core 層はテーブル名とファイルパスのリストだけを受け取る。識別軸の語彙（`subject_id`, `dkey` 等）を一切知らない。Project 層がプロジェクト設定（`config/table_schemas/`）を読み込み、Core 層を組み立てる。
 
 ### スコープ解決ファクトリと依存方向
 
-スコープ解決（stage.yaml 走査・ファイル収集・スコープ絞り込み・VIEW 登録・DDL 検証）は Project 層のスコープ解決ファクトリに集約する。これは DataStore と CLI が共有する土台であり、クラスではなく関数群として、組み立てフローの各ステップを独立した単位で提供する（具体仕様は [datastore.md](components/datastore.md#スコープ解決ファクトリ)）。利用者向けの入口は二段に分かれる。
+スコープ解決（stage.yaml 走査・宣言された入力 artifact の選択・ファイル収集・VIEW 登録・DDL 検証）は Project 層のスコープ解決ファクトリに集約する。これは DataStore と CLI が共有する土台であり、クラスではなく関数群として、組み立てフローの各ステップを独立した単位で提供する（具体仕様は [datastore.md](components/datastore.md#スコープ解決ファクトリ)）。利用者向けの入口は二段に分かれる。
 
 - `build_scoped_engine(scope, layout, schemas) -> QueryEngine`: 解決済みスコープから read-only の QueryEngine を返す低レベル入口
-- `open_store(stage, schemas, *, writable) -> DataStore`: run.py 向けの高レベル入口。`StageInfo` 一つから読み取りスコープ（inputs 由来）と書き込み対象（outs 由来）を導出し、内部で `build_scoped_engine` を用いる
+- `open_store(stage, schemas, *, writable) -> DataStore`: run.py 向けの高レベル入口。`StageInfo` 一つから読み取りスコープ（inputs.tables に宣言した artifact のみ）と書き込み対象（outs 由来）を導出し、内部で `build_scoped_engine` を用いる
 
 依存方向は次のとおりに引く。CLI のデータ参照コマンド（catalog / validate）は DataStore ファサードに依存せず、スコープ解決ファクトリ（+ Core の SchemaValidator）に依存する。DataStore は run.py / notebook 向けの祝福されたメイン経路であり、CLI はランタイムのファサードを介さず同じ土台を直接使う。両者はファサードを共有しないため、データ参照のために CLI が DataStore を import することはない。
 
@@ -90,6 +90,14 @@ Project 層が `config/project.yaml` を読み込み、欠落キーを既定値�
 - `fetch()` に渡される SQL の方言
 - QueryEngine Protocol の実装本体と、戻り値 Polars への変換
 
+### artifact 単位の依存宣言
+
+上流 artifact は `(stage, out key)` で識別する。Consumer は `inputs.tables` で DataStore に公開するテーブル artifact を選び、`inputs.files` で他ステージの出力ファイルをローカル名で参照する。`path_deps` は追加の外部ファイル・共有コードを直接パスで追跡する。DataStore に表示するデータは宣言済みの `inputs.tables` に限り、上流 stage の祖先全体を自動登録しない。
+
+Producer の `outs.<key>.table` がテーブル schema を明示する。ファイル名・Parquet metadata からのテーブル名推定はしない。管理対象 Parquet には論理テーブル名と DDL の SHA-256 を metadata として記録する。詳細は [stage.md](components/stage.md#stageyaml-仕様) / [datastore.md](components/datastore.md#parquet-metadata-の契約)。
+
+変更検知・実行順序・再実行は DVC に委譲する。uv / pip の環境情報は Git と環境管理ツールに委ね、標準で DVC に追跡させない。入力ファイルの改変は非推奨だが、任意の Python コードによる変更は禁止せず、結果の整合性は保証しない。パッケージ・コンポーネントの構造は [#57](https://github.com/sakashita44/staqkit/issues/57) で引き続き検討する。
+
 ## スコープ
 
 ### ドメイン依存の局所化
@@ -104,7 +112,7 @@ Project 層が `config/project.yaml` を読み込み、欠落キーを既定値�
 
 | 区分             | 内容                                                                                                                                                                                                                                                             |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| staqkit 固定     | [outs 統一スキーマ](components/stage.md#outs-統一スキーマ)（path + add_datastore）、[分散テーブル統合](components/stage.md#分散テーブルの統合)（UNION ALL + DDL 制約検証）、stage の概念、DuckDB over files クエリエンジン、DataStore クラスの query IF          |
+| staqkit 固定     | [outs 統一スキーマ](components/stage.md#outs-統一スキーマ)（path + 任意の table 宣言）、[分散テーブル統合](components/stage.md#分散テーブルの統合)（UNION ALL + DDL 制約検証）、stage の概念、DuckDB over files クエリエンジン、DataStore クラスの query IF          |
 | プロジェクト設定 | [テーブルスキーマ定義](components/datastore.md#テーブル結合のスキーマ契約)（config/table_schemas/、PK/FK で識別軸の階層構造を表現）、stage 名、ファイル配置規約、[検証レベル](directory-layout.md#プロジェクト全体設定)（`config/project.yaml` の `validation`） |
 
 ### 不変性の保証
@@ -196,8 +204,8 @@ staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の�
 
 - `ConfigError`
     - `SchemaDefinitionError`: DDL パース失敗、table_schema YAML 単体の外形違反（`column_descriptions` が DDL 不在カラムを参照する等）
-    - `StageDefinitionError`: stage.yaml の外形違反、outs key 重複、add_datastore クロス検証違反
-    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。source_stage 不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#追跡性)）
+    - `StageDefinitionError`: stage.yaml の外形違反、outs key 重複、table 宣言と schema の矛盾
+    - `ReferenceIntegrityError`: 参照の解決可能性一般の失敗。入力 artifact（stage/out）不在、FK 参照先テーブル・カラム不在、DAG 循環、active が planned を参照（[stage.md](components/stage.md#active-が-planned-を参照した場合)）、外部取り込みポインタ（repo.url + rev_lock）の構造的不整合（記録の欠落・不正形式）。remote への runtime 到達性・解決は DVC/Git の責務でこの階層の対象外（[external-data.md](components/external-data.md#追跡性)）
 - `ValidationError`
     - `SchemaMismatchError`: カラム名・型不一致、ステージ間 UNION ALL 非互換
     - `ConstraintViolationError`: NOT NULL / PK / UNIQUE / CHECK / FK 違反
@@ -222,8 +230,8 @@ config/table_schemas/
   error  timeseries.yaml: FK 参照先テーブル 'dtype' が存在しない
          直し方: config/table_schemas/dtype.yaml を作成するか REFERENCES 先を修正
 stages/
-  error  normalize: source_stage 'import' が存在しない (stages/normalize/stage.yaml)
-         直し方: inputs.source_stage を実在するステージ名に修正
+  error  normalize: 入力 artifact 'import/joint_angle' が存在しない (stages/normalize/stage.yaml)
+         直し方: inputs.tables の stage/out を実在する出力に修正
   warn   analyze: 依存先 'preprocess' は planned（データ未生成）
          直し方: preprocess を実装するまで analyze は repro できない
 
@@ -276,16 +284,16 @@ stages/
 
 | 情報                           | SSoT                                      | 格納先                                                                      |
 | ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
-| DAG構造                        | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                                 |
+| 実行 DAG 構造                 | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                                 |
 | パラメータ（値）               | 外部 params ファイル（慣習上 `params/`）  | DVC ネイティブの params ファイル。複数ステージで共有可能                    |
 | パラメータ参照（束縛）         | stages/xxx/stage.yaml                     | params セクション（ローカル名 → `{ file, key }`）                           |
-| inputs（依存先ステージ）       | stages/xxx/stage.yaml                     | inputs セクション（source_stage のみ）                                      |
+| inputs（依存 artifact）       | stages/xxx/stage.yaml                     | inputs.tables / inputs.files（stage と out の参照）                                      |
 | description（1行）             | stages/xxx/stage.yaml                     | desc フィールド                                                             |
 | description（詳細）            | stages/xxx/README.md                      | アルゴリズム説明                                                            |
 | planned 状態                   | stages/xxx/stage.yaml                     | status フィールド + data/ の有無                                            |
 | 出力宣言（outs）               | stages/xxx/stage.yaml                     | outs セクション                                                             |
 | 来歴（params・ハッシュ・系譜） | dvc.lock + git 履歴                       | Git管理の dvc.lock（stage.yaml から生成）を源泉に provenance/history が導出 |
-| 外部依存（extra_deps）         | stages/xxx/stage.yaml                     | extra_deps セクション                                                       |
+| 追加のパス依存（path_deps）         | stages/xxx/stage.yaml                     | path_deps セクション                                                       |
 | 処理コード                     | stages/xxx/run.py                         | エントリポイント                                                            |
 | テーブルカタログ               | `staqkit catalog` の stdout 出力          | 対象テーブルは table_schemas の `catalog: true` で指定                      |
 
