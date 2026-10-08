@@ -208,3 +208,9 @@ __marimo__/
 
 # Claude Code
 .claude/settings.local.json
+
+# mise のホスト固有の設定
+mise.local.toml
+
+# 一時的な作業ファイル
+tmp/

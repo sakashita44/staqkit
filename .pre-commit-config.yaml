@@ -1,43 +1,80 @@
 # pre-commit フック設定
-# 使い方: uv run pre-commit install
+# 使い方: uvx pre-commit install --hook-type pre-commit --hook-type pre-push
+#
+# 実装言語に依らず全リポジトリが持つ共通の品質ゲート。
+# 言語別レイヤは自身の追加フックをこのファイルの末尾へ追記する
+default_stages: [pre-commit]
+
 repos:
+    # シークレット混入の検出
+    - repo: https://github.com/gitleaks/gitleaks
+      rev: v8.30.1
+      hooks:
+          - id: gitleaks
+
     # コードフォーマッター (Prettier)
     - repo: https://github.com/pre-commit/mirrors-prettier
+      # mirrors-prettier はアーカイブ済みで v4.0.0-alpha.8 が最終版。
+      # 動作しなくなった時点で local フック (node 実行) へ切り替える
       rev: v4.0.0-alpha.8
       hooks:
           - id: prettier
-            types_or: [markdown, json, yaml, toml]
-            additional_dependencies:
-                ["prettier@3.4.2", "prettier-plugin-toml@2.0.1"]
-            args:
-                [
-                    --write,
-                    --config=.config/.prettierrc,
-                    --ignore-path=.config/.prettierignore,
-                ]
-
-    # Pythonコードフォーマッター・リンター (Ruff)
-    - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.9.4
-      hooks:
-          - id: ruff
-            args: [--fix, --config=.config/ruff.toml]
-          - id: ruff-format
-            args: [--config=.config/ruff.toml]
+            # toml は対象外。prettier はプラグインを対象ファイル側から解決するため、
+            # pre-commit の隔離環境へ入れた prettier-plugin-toml を読み込めない
+            types_or: [markdown, json, yaml]
+            additional_dependencies: ['prettier@3.9.6']
+            args: [--write]
 
     # Markdownリント
     - repo: https://github.com/DavidAnson/markdownlint-cli2
-      rev: v0.17.2
+      rev: v0.23.2
       hooks:
           - id: markdownlint-cli2
-            args: [--config, .config/.markdownlint.jsonc]
 
-    # 末尾空白・ファイル末尾改行の修正
+    # 一般的な誤りの検出・修正
     - repo: https://github.com/pre-commit/pre-commit-hooks
-      rev: v5.0.0
+      rev: v6.0.0
       hooks:
           - id: trailing-whitespace
             args: [--markdown-linebreak-ext=md]
           - id: end-of-file-fixer
+          # 一つのファイル内での改行コードの混在だけを検出する。
+          # --fix=lf は working tree を CRLF とする .gitattributes の
+          # Windows 固有スクリプトまで LF へ書き換えるため採らない
           - id: mixed-line-ending
-            args: [--fix=lf]
+            args: [--fix=no]
+          - id: check-merge-conflict
+          - id: check-yaml
+          - id: check-added-large-files
+    # ---- python レイヤの追加フック (展開時に追記した部分) ----
+
+    # Pythonコードフォーマッター・リンター (Ruff)
+    - repo: https://github.com/astral-sh/ruff-pre-commit
+      rev: v0.16.5
+      hooks:
+          - id: ruff-check
+            args: [--fix]
+          - id: ruff-format
+
+    # リポジトリ全体を見る検査 (push 時)
+    # pre-commit の隔離環境ではプロジェクトの依存を解決できないため、
+    # uv の仮想環境をそのまま使う local フックとして実行する。
+    # types で絞ると Python ファイルを含まない push でスキップされるため always_run にする
+    - repo: local
+      hooks:
+          - id: pyright
+            name: pyright (型検査)
+            entry: uv run pyright
+            language: system
+            always_run: true
+            pass_filenames: false
+            stages: [pre-push]
+
+          # テストを書いたら有効化する
+          # - id: pytest
+          #   name: pytest
+          #   entry: uv run pytest
+          #   language: system
+          #   always_run: true
+          #   pass_filenames: false
+          #   stages: [pre-push]
