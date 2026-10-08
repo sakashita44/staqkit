@@ -10,9 +10,9 @@
 
 ## ソースとしての扱い
 
-取り込んだデータは DataStore へ直接は載せず、ローカル生データと同じくソースとして扱う。下流の取り込みステージが `path_deps` で直接ファイルやディレクトリとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#extra_deps-dag外の外部依存)）。
+取り込んだデータは DataStore へ直接は載せず、ローカル生データと同じくソースとして扱う。下流の取り込みステージが `path_deps` で直接ファイルやディレクトリとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#path_deps-物理パスで指定する追加依存)）。
 
-- 取り込みステージは `path_deps` のソースを読み、run.py で `data/stages/<stage>/` 配下（＝当該ステージの outs）へ書き出す。非 Parquet 出力をそのまま管理下に置く場合は `run.py` で `shutil.copy` し、コピー先を `table` 未指定 の out として宣言、パスを格納した sidecar parquet（`table` 指定あり）を併設すると DataStore から発見できる。加工して Parquet 化する場合は `store.write_table` で `table` 指定あり の out を書く。`staqkit add-stage --template ingest` がこの定型を生成する。
+- 取り込みステージは `path_deps` のソースを読み、run.py で `data/stages/<stage>/` 配下（＝当該ステージの outs）へ書き出す。非 Parquet 出力をそのまま管理下に置く場合は `run.py` で `shutil.copy` し、コピー先を `table` のない通常 artifact として宣言し、そのパスを格納した sidecar Parquet を `table` 付きの artifact として併設すると DataStore から発見できる。加工して Parquet 化する場合は `store.write_table("<out_key>", df)` で `table` のある out を書く。`staqkit add-stage --template ingest` がこの定型を生成する。
 - DataStore に入るデータは必ずそのプロジェクト自身がスキーマ契約を宣言する。これは生データ取り込みと同一の原則であり、外部だけの特例ではない。上流の公開スキーマ（標準構造そのものが外部 IF）はステージ著者が定義を書くときに参照する。
 - 上流データの意味確定に別テーブルが必要な場合は、そのテーブルの parquet も import する。「スキーマを必ず import する」というルールではなく、生データを複数ファイル読むのと同じ必要駆動の取り込みである。
 - これにより子リポジトリは自身のスキーマで自己完結し、外部スキーマを転送・解釈する専用の仕組みを持たない。
