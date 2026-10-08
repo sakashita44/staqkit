@@ -58,7 +58,7 @@ staqkit validate --target descriptions # description 網羅検査のみ
 
 引数なしで横断的なフルチェックを実行する。全検査群を回す `staqkit validate` が保証の本体であり、[A3（引き継ぎ）・A5（公開）](https://github.com/sakashita44/staqkit/discussions/50)のゲートはこれに依存する。`--target` は編集ループ中に「いま触っている部分だけ」を回すための便宜フィルタであり、検査群の網羅的な列挙でも硬い契約でもない。検査群が増えても、単独実行したい編集ループの局面がある場合にだけ既存のいずれかへ寄せ、なければフル実行に委ねる。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
 
-検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない artifact は DataStore から不可視。一般の Python コードによる物理パスへの直接アクセス自体は禁止しない。`outs` に `table` を宣言した で宣言した出力はスキーマ・Parquet metadata 検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければ error となる。`table` を宣言しない の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
+検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない artifact は DataStore から不可視。一般の Python コードによる物理パスへの直接アクセス自体は禁止しない。`outs.<key>.table` を宣言した出力はスキーマ・Parquet metadata の検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければエラーとなる。`table` を宣言していない出力はテーブルスキーマ検査の対象外となる。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
 
 - 参照整合性（入力 stage/out key の実在・table 種別・循環検出、params 束縛先 file/key の実在確認）: `--target references`
 - スキーマ整合性（管理 Parquet metadata とカラム型 vs `config/table_schemas/` の DDL）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
