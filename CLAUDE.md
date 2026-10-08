@@ -4,15 +4,21 @@
 
 staqkit はファイルベースの実験データ解析を対象とする Python パッケージ。目指す性質と管理範囲は `docs/requirements.md` に記述する。
 
-現在の `src/staqkit/` は初期状態であり、CLI・DataStore・stage runtime 等の公開APIは未実装。実在しない内部クラスやモジュール構成を前提にしない。
+`src/staqkit/` は初期状態であり、公開CLI・解析ランタイムは未実装。実在しない内部クラスやモジュール構成を前提にしないこと。
 
 ## 開発コマンド
+
+初回のセットアップで、依存関係を同期し、pre-commit フックを有効化する。
 
 ```bash
 uv sync
 uv run pre-commit install
+```
+
+変更後の検証では、テストと型チェックを実行し、いずれもエラーなく終了することを確認する。単一のテストファイルだけを実行する場合は `uv run pytest <テストファイルのパス>` とする。
+
+```bash
 uv run pytest
-uv run pytest tests/test_placeholder.py
 uv run pyright
 ```
 
