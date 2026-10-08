@@ -10,9 +10,9 @@
 
 ## ソースとしての扱い
 
-取り込んだデータは DataStore へ直接は載せず、ローカル生データと同じくソースとして扱う。下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#extra_deps-dag外の外部依存)）。
+取り込んだデータは DataStore へ直接は載せず、ローカル生データと同じくソースとして扱う。下流の取り込みステージが `path_deps` で直接ファイルやディレクトリとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[stage.md](stage.md#extra_deps-dag外の外部依存)）。
 
-- 取り込みステージは `extra_deps` のソースを読み、run.py で `data/stages/<stage>/` 配下（＝当該ステージの outs）へ書き出す。非 Parquet 出力をそのまま管理下に置く場合は `run.py` で `shutil.copy` し、コピー先を `add_datastore: false` の out として宣言、パスを格納した sidecar parquet（`add_datastore: true`）を併設すると DataStore から発見できる。加工して Parquet 化する場合は `store.write_table` で `add_datastore: true` の out を書く。`staqkit add-stage --template ingest` がこの定型を生成する。
+- 取り込みステージは `path_deps` のソースを読み、run.py で `data/stages/<stage>/` 配下（＝当該ステージの outs）へ書き出す。非 Parquet 出力をそのまま管理下に置く場合は `run.py` で `shutil.copy` し、コピー先を `table` 未指定 の out として宣言、パスを格納した sidecar parquet（`table` 指定あり）を併設すると DataStore から発見できる。加工して Parquet 化する場合は `store.write_table` で `table` 指定あり の out を書く。`staqkit add-stage --template ingest` がこの定型を生成する。
 - DataStore に入るデータは必ずそのプロジェクト自身がスキーマ契約を宣言する。これは生データ取り込みと同一の原則であり、外部だけの特例ではない。上流の公開スキーマ（標準構造そのものが外部 IF）はステージ著者が定義を書くときに参照する。
 - 上流データの意味確定に別テーブルが必要な場合は、そのテーブルの parquet も import する。「スキーマを必ず import する」というルールではなく、生データを複数ファイル読むのと同じ必要駆動の取り込みである。
 - これにより子リポジトリは自身のスキーマで自己完結し、外部スキーマを転送・解釈する専用の仕組みを持たない。
@@ -21,13 +21,13 @@
 
 ソース扱いでも追跡性は損なわれない。`dvc import` はコンテンツハッシュに加えて出典（`repo.url`）と固定コミット（`rev_lock`）を Git 管理の `.dvc` に記録するため、出自リンクを持たないローカル生データの `dvc add` より強い来歴を持つ。
 
-- 取り込みステージは `data/external/...` を `extra_deps` の deps として取るため、`dvc.lock` にハッシュが記録される。来歴の源泉（`dvc.lock` + git 履歴）で「上流コミット → `data/external/` → 取り込みステージ出力 → 下流」が一本に繋がる。
+- 取り込みステージは `data/external/...` を `path_deps` の deps として取るため、`dvc.lock` にハッシュが記録される。来歴の源泉（`dvc.lock` + git 履歴）で「上流コミット → `data/external/` → 取り込みステージ出力 → 下流」が一本に繋がる。
 - `dvc update` で上流 `rev_lock` が変わるとハッシュが変わり、取り込みステージ以降が DVC により無効化される。鮮度伝搬がリポジトリ境界を越えて働く。
 - 上流リポジトリ内部での来歴（上流での生成過程）まで辿るには、固定 `rev` で上流リポジトリを別途参照する。下流は正確・再現可能なポインタを保持し、より深い来歴はそれを解決して辿る。
 
 ## 配置構造
 
-DAG にとって外部のソース（どのステージも生成せず、取り込みステージが消費するだけのデータ）は `data/external/` にまとめる。staqkit は `extra_deps` が宣言したパスを解決するだけで配置を強制しないため、これは一覧性のための参考配置である。
+DAG にとって外部のソース（どのステージも生成せず、取り込みステージが消費するだけのデータ）は `data/external/` にまとめる。staqkit は `path_deps` が宣言したパスを解決するだけで配置を強制しないため、これは一覧性のための参考配置である。
 
 ```text
 data/external/
