@@ -114,13 +114,13 @@ class DataStore:
         self,
         engine: QueryEngine,                  # VIEW 登録済み・read-only の QueryEngine
         schemas: TableSchemaSet,              # プロジェクト全テーブルスキーマの検証済み集合
-        output_paths: dict[str, Path] | None = None,  # テーブル名 → 出力先パス
+        output_artifacts: dict[str, tuple[str, Path]] | None = None,  # out key → (table名, 出力先) 
     ): ...
 ```
 
 - `engine`: スコープ解決ファクトリが対象スコープのファイルを VIEW 登録した結果。DataStore 自身は登録操作を行わず、問い合わせ（`query` / `fetch`）にこの engine を用いる
 - `schemas`: `config/table_schemas/` のパース・検証済みスナップショット。DDL の PK/FK 制約からテーブル間関係を導出する
-- `output_paths`: `None` なら `write_table` は利用不可（読み取り専用インスタンス）。run.py 経路では `open_store(writable=True)` が `stage` の `outs` から artifact key → (table, path) を解決して渡す
+- `output_artifacts`: `None` なら `write_table` は利用不可（読み取り専用インスタンス）。run.py 経路では `open_store(writable=True)` が `stage` の `outs` から artifact key → (table, path) を解決して渡す
 - DataStore 自体を context manager として提供（`with DataStore(...) as store:`）。close 時に engine を解放する
 
 ### 接続ライフサイクル
@@ -272,10 +272,10 @@ def run(stage: StageInfo, store: DataStore):
 
 - `output` は実行中 stage の `outs.<key>`。内部で `(table, path)` を解決し、宣言された `TableSchemaSet.get(table)` を参照する。
 - 未宣言 key、`table` のない key、参照スキーマが存在しない key は、対象 `stage.yaml` と有効な key 候補を示してエラー。
-- `output_paths` は単なるパス集合ではなく、出力キー・論理テーブル名・物理パスの対応を保つ。StageInfo が解決した値を DataStore へ渡す（同じパス規則の重複実装はしない）。
+- `output_artifacts` は単なるパス集合ではなく、出力キー・論理テーブル名・物理パスの対応を保つ。StageInfo が解決した値を DataStore へ渡す（同じパス規則の重複実装はしない）。
 - `write_table` はスキーマ検証（有効時）と metadata 付与と Parquet 書き込みをまとめる。出力の物理パスは `stage.out_path("<key>")` で非テーブル出力も含めて取得できる。
 - 書き込み後もそのインスタンスの入力 VIEW は変えない。読み取りスコープに自身の出力は含めない。
-- `output_paths` が `None` の読み取り専用コンテキストでは書き込めない。
+- `output_artifacts` が `None` の読み取り専用コンテキストでは書き込めない。
 
 ### Parquet metadata の契約
 
