@@ -13,7 +13,7 @@ DataStore 自身はプロジェクト構成（`stages/`, `config/` 等）を走�
 |                  | TableSchemaSet                                     | DataStore                                  |
 | ---------------- | -------------------------------------------------- | ------------------------------------------ |
 | 対応ディレクトリ | `config/table_schemas/`                            | `data/stages/*/`                           |
-| 表現するもの     | プロジェクトで定義されたスキーマ全体               | スコープ内のデータ                         |
+| 表現するもの     | プロジェクトで定義されたスキーマ全体               | 宣言により選択されたテーブル artifact                         |
 | データの有無     | 不要                                               | 必須                                       |
 | 問い合わせの意味 | 「プロジェクトにどんなテーブルが定義されているか」 | 「今このコンテキストで見えるデータは何か」 |
 
@@ -120,7 +120,7 @@ class DataStore:
 
 - `engine`: スコープ解決ファクトリが対象スコープのファイルを VIEW 登録した結果。DataStore 自身は登録操作を行わず、問い合わせ（`query` / `fetch`）にこの engine を用いる
 - `schemas`: `config/table_schemas/` のパース・検証済みスナップショット。DDL の PK/FK 制約からテーブル間関係を導出する
-- `output_paths`: `None` なら `write_table` は利用不可（読み取り専用インスタンス）。run.py 経路では `open_store(writable=True)` が `stage` の outs から解決して渡す
+- `output_paths`: `None` なら `write_table` は利用不可（読み取り専用インスタンス）。run.py 経路では `open_store(writable=True)` が `stage` の `outs` から artifact key → (table, path) を解決して渡す
 - DataStore 自体を context manager として提供（`with DataStore(...) as store:`）。close 時に engine を解放する
 
 ### 接続ライフサイクル
@@ -130,62 +130,48 @@ DataStore のライフサイクル = QueryEngine 接続のライフサイクル�
 - run.py: ステージ実行と 1:1。`run_stage` が生成し、終了後に破棄
 - CLI: コマンド実行中のみ生存
 
-## ステージ発見
+## ステージ発見と artifact 解決
 
-`discover_stages(layout) -> list[StageDefinition]` が `stages/**/stage.yaml` を再帰走査してステージ定義一覧を得る。各 StageDefinition の詳細フィールドは [stage.md](stage.md#実行モデル) を参照。対応する `data/stages/*/` からファイルを読む。ステージ名は `stages/` からの相対パス。
+`stage.yaml` は出力 artifact を `(stage, out key)` で識別する宣言の正本。ある stage の `outs.<key>.table` が存在する場合だけ、その artifact は DataStore に登録できる。テーブル名はファイル名・拡張子・Parquet metadata の探索結果から導出しない。
 
-- 定義あり・データなし → planned 状態
-- 定義あり・データあり → 通常ステージ
-- dvc.yaml のパースに依存しない（DVC 内部構造への密結合を回避）
+Managed `run.py` の可視範囲は、当該 stage が `inputs.tables` に宣言した上流 artifact の集合に等しい。`inputs.files` や `path_deps` だけで参照するファイルは自動登録しない。宣言上の alias、物理ファイルパス、テーブル名は別の概念である。
+
+`inputs.tables` から選んだ artifact を同じ論理テーブル名ごとに集め、個々の構造と metadata を照合してから UNION ALL 相当の VIEW を作る。他の stage の出力や、そのさらに上流の出力を閉包として追加しない。
 
 ## スコープ解決ファクトリ
 
-DataStore の組み立て（ステージ走査・ファイル収集・スコープ絞り込み・VIEW 登録・スキーマ読み込み）は Project 層のスコープ解決ファクトリに集約する。ファクトリはクラスではなく関数群であり、各ステップは独立して呼び出し・テストできる単位に分かれる。パス規約は [ProjectLayout](../architecture.md#projectlayout) が単一の出所として保持し、各関数はそこへ委譲する。
+スコープ解決は Project 側の関数群として実装する。役割は宣言の参照整合性検査、`(stage, out)` からのパスと table の解決、schema 照合、VIEW 組み立てまで。鮮度判定・実行順序・再実行の依存グラフ処理は DVC に委譲する（コンポーネント境界の再評価は [#57](https://github.com/sakashita44/staqkit/issues/57)）。
 
 ### 組み立てフロー
 
-コマンド実行ごとに、次の順序で組み立てる。
+1. `load_schema_set(layout) -> TableSchemaSet`: `config/table_schemas/**/*.yaml` の定義をパースしてスキーマ集合を作る。
+2. `discover_stages(layout)`: `stage.yaml` 群を取得する。
+3. `resolve_table_artifacts(stage.inputs.tables, stages, layout) -> list[ResolvedArtifact]`: 宣言された `(stage, out)` を実ファイルパスと論理 `table` に解決する。参照先不存在／table 未指定はエラー。
+4. `build_scoped_engine(artifacts, schemas) -> QueryEngine`: 選択されたファイルを artifact 単位で schema / metadata 照合し、table ごとに VIEW 登録する。
 
-1. `load_schema_set(layout) -> TableSchemaSet`: `config/table_schemas/**/*.yaml` をパース・検証し、プロジェクト全体のスキーマスナップショットを得る。スコープに依存せず、コマンド実行ごとに一度だけ構築する。
-1. `discover_stages(layout) -> list[StageDefinition]`: `stages/**/stage.yaml` を再帰走査し、型付きのステージ定義一覧を得る（[ステージ発見](#ステージ発見)）。
-1. `upstream_closure(stages, inputs) -> ScopeSpec`: 対象ステージの `inputs` を起点に、DAG を遡って到達可能な全ステージを算出する純粋関数。ファイルシステムに触れないため単体テストが容易。
-1. `build_scoped_engine(scope, layout, schemas) -> QueryEngine`: `scope` に含まれるステージの `add_datastore: true` な outs を、同名テーブル（ステム一致）ごとに UNION ALL して VIEW 登録し、read-only の QueryEngine を返す。
-1. 上記を結線して DataStore を構築する。
-
-`ScopeSpec` は解決済みのステージ集合を表す。上流閉包の算出は呼び出し側（`run_stage` / CLI）の責務であり、`build_scoped_engine` は「与えられた集合のファイルを集めて VIEW 化する」ことに専念する。
+`ResolvedArtifact` は table 名、stage 名、out key、実パスを持つ内部の解決結果であり、利用者に新しい宣言を要求するものではない。DVC generator と同じ artifact 参照解決規則を共有するが、実行判定のための独自 DAG / upstream closure は持たない。
 
 ### 入口
 
-ファクトリの入口はコンテキスト別に分かれる。
-
-- 低レベル（CLI データ参照）: `build_scoped_engine(scope, layout, schemas) -> QueryEngine`。解決済みスコープから read-only の QueryEngine を返す。CLI の catalog / validate が直接使う。
-- run.py（管理下）: `open_store(stage, schemas, *, writable=True) -> DataStore`。引数の `StageInfo` 一つから、読み取りスコープ（`stage` の inputs 由来の上流閉包）と書き込み対象（`stage` の outs 由来の出力パス）の双方を導出し、内部で `build_scoped_engine` を用いて DataStore を組み立てる。`writable=False` のときは出力パスを与えず読み取り専用とする。
-- notebook / 管理外（読み取り専用）: `open_scoped_store(root, *, up_to=None) -> DataStore`。`StageInfo` を持たない管理外コンテキスト向けの入口。プロジェクトルートから layout・stages・schemas を構築し、`up_to` 指定時はそのステージ群の上流閉包、未指定時は全ステージをスコープとして、出力パスなし（読み取り専用）の DataStore を返す。
+- CLI の catalog / validate: 検査・問い合わせ対象の artifact 集合を選び、`build_scoped_engine` を用いる。
+- 管理下 `run.py`: `open_store(stage, schemas, *, writable=True) -> DataStore`。入力の `inputs.tables` だけを VIEW として登録し、宣言した `outs` の table artifact を書き込み先とする。
+- 管理外 notebook / Python: `open_scoped_store(root, *, up_to=None) -> DataStore`（読み取り専用）。全管理テーブルや指定 stage 群を探索できるが、managed run.py のスコープには反映しない。探索の際に別ステージの祖先まで自動的に登録する挙動は廃止方向。
 
 ```python
-# notebook から管理下データを読む（管理境界インターフェース）
-with open_scoped_store(Path("."), up_to=["normalize"]) as store:
-    df = store.query("timeseries", {"subject_id": [1, 2]})
+with open_scoped_store(root) as store:
+    df = store.query("timeseries", {"dkey": ["angle_x"]})
 ```
 
-`open_scoped_store` は管理外から管理下データを参照する祝福された読み取り口であり、DataStore を手で構築する必要をなくす。書き込みは run.py（管理下）でのみ行うため read-only に固定する。
-
-`StageInfo` は [ProjectLayout](../architecture.md#projectlayout) を委譲先に持つため、`open_store` は `stage` から layout を辿れる。読み取りスコープが inputs、書き込み対象が outs、という対応が `StageInfo` 一点に集約され、両者を別経路で渡す曖昧さを排除する。
-
-`schemas` を `stage` に内包させず別引数で受けるのは、TableSchemaSet がスコープ非依存のプロジェクト全体スナップショットであり、`load_schema_set` でコマンド実行ごとに一度だけ構築して全成果物（QueryEngine 直利用の CLI 経路と DataStore 経路の双方）で共有する単位だからである。ステージごとに変わる `stage` と、コマンド全体で不変の `schemas` はライフサイクルが異なるため、引数として分離する。
+`staqkit validate` の宣言整合性検査は QueryEngine なしで実行可能であり、実 Parquet の構造／制約検査時のみ QueryEngine を使う。
 
 ### コマンド別に必要な構成要素
 
-組み立ての各成果物は、コマンドの目的に応じて必要なものだけを構築する。
-
-| コマンド                         | TableSchemaSet | QueryEngine            | DataStore                      |
-| -------------------------------- | -------------- | ---------------------- | ------------------------------ |
-| run.py（run_stage 経由）         | 必要           | 必要                   | 必要（open_store）             |
-| `staqkit catalog`                | 必要           | 必要                   | 不要（build_scoped_engine 直） |
-| `staqkit validate`               | 必要           | スキーマ準拠検査時のみ | 不要                           |
-| `staqkit dag` / `staqkit status` | 不要           | 不要                   | 不要                           |
-
-`staqkit validate` の config 整合性検査（参照整合性・FK 整合性）は TableSchemaSet と StageDefinition のみで成立し、QueryEngine を要しない。Parquet の DDL 準拠検査を行うときにのみ `build_scoped_engine` を併用する。
+| コマンド | TableSchemaSet | QueryEngine | DataStore |
+| --- | --- | --- | --- |
+| `staqkit schema` / `column` | 必要 | 不要 | 不要 |
+| `staqkit catalog` | 必要 | 必要 | 不要 |
+| `staqkit validate` | 必要 | 実データ検証のみ | 不要 |
+| managed `run.py` | 必要 | 必要 | 必要 |
 
 ## 識別子と属性の表現
 
@@ -274,49 +260,38 @@ df = store.fetch(
 ### write_table
 
 ```python
-def write_table(self, name: str, df: pl.DataFrame) -> None:
-    """スキーマ検証 + Parquet 書き出し"""
+def write_table(self, output: str, df: pl.DataFrame) -> None:
+    """現在の stage.yaml の outs で宣言した、table artifact key に書き込む。"""
 ```
 
 ```python
 def run(stage: StageInfo, store: DataStore):
     result = process(...)
-    store.write_table("timeseries", result)
+    store.write_table("joint_angle", result)  # テーブル名ではなく outs の key
 ```
 
-- テーブル名のみ指定。出力先パスは DataStore がコンストラクタで受け取った `output_paths` から内部解決
-- スキーマバリデーション + ファイル書き込みを一体で行う（バリデーション忘れ防止）
-- `output_paths` が `None`（読み取り専用インスタンス）の場合はエラー
-- 書き込んだデータはその DataStore インスタンスからは読めない（QueryEngine 内の VIEW を変更しない。DataStore は実行中 immutable）。run.py 内では書き込み前の DataFrame を直接保持しているため、再読み込みの必要はない
+- `output` は実行中 stage の `outs.<key>`。内部で `(table, path)` を解決し、宣言された `TableSchemaSet.get(table)` を参照する。
+- 未宣言 key、`table` のない key、参照スキーマが存在しない key は、対象 `stage.yaml` と有効な key 候補を示してエラー。
+- `output_paths` は単なるパス集合ではなく、出力キー・論理テーブル名・物理パスの対応を保つ。StageInfo が解決した値を DataStore へ渡す（同じパス規則の重複実装はしない）。
+- `write_table` はスキーマ検証（有効時）と metadata 付与と Parquet 書き込みをまとめる。出力の物理パスは `stage.out_path("<key>")` で非テーブル出力も含めて取得できる。
+- 書き込み後もそのインスタンスの入力 VIEW は変えない。読み取りスコープに自身の出力は含めない。
+- `output_paths` が `None` の読み取り専用コンテキストでは書き込めない。
 
-### 出力パスの SSoT
+### Parquet metadata の契約
 
-全 outs（テーブル・非テーブル）の出力パス解決は StageInfo の責務。DataStore は StageInfo が解決した結果を `output_paths` として受け取るだけ（重複ではなく委譲）。非テーブル出力（画像等）は `stage.out_path("key")` で直接取得する。
+`outs.<key>.table` を持つ管理対象 Parquet には、以下の key-value metadata を必ず埋め込む。ファイル名は table 名に依存しない。
 
-### add_datastore フラグ
-
-デフォルト true、省略不可。
-
-```yaml
-outs:
-    timeseries:
-        path: timeseries.parquet
-        add_datastore: true # 省略不可
-    raw_dump:
-        path: raw_dump.parquet
-        add_datastore: false # 明示的に除外
-    summary_figure:
-        path: figures/summary.png
-        add_datastore: false # 非 Parquet は false のみ許可
+```text
+staqkit.table = "timeseries"
+staqkit.schema_sha256 = "<SHA-256 of DDL>"
 ```
 
-クロスバリデーション:
-
-- `add_datastore: true` + スキーマ定義なし → エラー（スキーマ忘れ検出）
-- `add_datastore: false` + スキーマ定義あり → エラー（矛盾検出）
-- `add_datastore: false` + 同名テーブルスキーマ存在 → エラー（同名で除外は矛盾）
-- フラグ省略 → エラー（意図の明示を強制）
-- 非 Parquet + `add_datastore: true` → エラー
+- `staqkit.table` は外部の論理スキーマへの参照。スキーマ本体を各 Parquet へ複製しない。`config/table_schemas/` 内の物理ファイルパスは metadata に記録しない。
+- ハッシュ対象は `TableSchema.ddl_raw` に対応する YAML の `ddl` スカラ値（UTF-8 文字列、改行を LF に統一）。`description`、`column_descriptions`、`catalog` 等は含めない。DDL を SQL として意味等価に正規化する処理は行わない。
+- `validation.on_write: off` でも managed artifact の metadata 付与は省略しない。生の `Path` を使ってユーザーが直接書き込んだファイルを自動修復はしない。
+- 入力 artifact の登録時は宣言の `table` と metadata の `staqkit.table`、schema hash、実 Parquet の物理スキーマを照合する。metadata の欠落／矛盾は診断対象。hash 不一致と現在の DDL に対する構造不適合は別の検査結果とする。検証レベルに応じた扱いは [#54](https://github.com/sakashita44/staqkit/issues/54) で確定。
+- `table` 未宣言の通常 artifact は、拡張子が `.parquet` であっても staqkit metadata を要求せず DataStore に登録しない。metadata が存在するだけで登録が有効になることもない。
+- `schema_sha256` は生成時の**構造的**スキーマ参照を識別する情報であり、単位やデータの全意味を保証するものではない。metadata version フィールドは初期契約に設けない。
 
 ## メタデータ API
 
@@ -342,9 +317,9 @@ def schema(self, table: str) -> TableSchema:
 
 ## テーブル結合のスキーマ契約
 
-DataStore は同名テーブルを全ステージ分 UNION ALL して1つの VIEW にする。全ステージが同一のカラム定義を持つことが要求されるため、`config/table_schemas/` をコンシューマ側の契約として維持し、プロデューサー側の契約は書き込み時バリデーションで実現する。
+DataStore は宣言された入力 artifact のうち同じ `table` を持つものだけを UNION ALL して1つの VIEW にする。各 artifact がその論理テーブルの同一カラム定義に準拠する必要があるため、`config/table_schemas/` をコンシューマ側の契約として維持し、プロデューサー側の契約は書き込み時バリデーションで実現する。
 
-スキーマ定義は SQL DDL をそのまま記述する。DuckDB にそのまま渡せる標準 SQL を正統な形式とする。カタログ等の staqkit 固有メタデータは YAML フィールドとして併記する。
+出力 artifact に対応するスキーマは `outs.<key>.table` から解決する。スキーマ定義は SQL DDL をそのまま記述する。DuckDB にそのまま渡せる標準 SQL を正統な形式とする。カタログ等の staqkit 固有メタデータは YAML フィールドとして併記する。
 
 ```yaml
 # config/table_schemas/timeseries.yaml
@@ -368,7 +343,7 @@ column_descriptions:
 - `ddl`: SQL DDL（CREATE TABLE 文）。DuckDB にそのまま渡せる標準 SQL を正統な形式とする。DDL は DuckDB 依存であり CHECK 式にエンジン固有関数を含みうる。これはエンジン差し替え時に触れる migration surface（[architecture.md](../architecture.md#エンジン置換時の作業範囲)）であり、置換時には DDL のマイグレーションを伴う
 - `description`: テーブルの説明（カタログ出力に使用）
 - `catalog`: `staqkit catalog` の出力対象とするか（デフォルト: false）。CLI で `--table` を明示指定した場合はそちらが優先
-- `column_descriptions`: カラム名 → 説明文字列のマップ。単位は説明内に記述する（例: `"体重 [kg]"`）。FK カラムの description は省略可（参照先の description で意味が明確なため）
+- `column_descriptions`: 人間向けの説明文字列。計算上必要な単位等は `dtype` 等の明示された属性データや params に持たせ、これを計算依存としない（説明文だけの修正で DVC 再実行しない）。単位は説明内にも記述できる（例: `"体重 [kg]"`）。FK カラムの description は省略可（参照先の description で意味が明確なため）
 
 ### table_schemas のディレクトリ構成
 
@@ -401,18 +376,18 @@ validation:
 
 DataStore 組み立て時に適用する。
 
-- `off`: 検証なし
-- `schema`: カラム名・型が DDL と一致するか + ステージ間 UNION ALL 互換性（メタデータのみ、全行スキャン不要）
+- `off`: 検証なし（ただし宣言にない artifact は登録しない）
+- `schema`: 各入力 artifact の Parquet metadata の存在・期待 table／DDL hash とカラム名・型を確認し、その後に UNION ALL 互換性を検査する（全行スキャン不要）。hash 不一致の扱いは #54 で確定
 - `constraint`: schema に加え NOT NULL / PK / UNIQUE / CHECK / FK を全行スキャンで検証
 
 #### 書き込み時
 
 write_table 実行時に適用する。
 
-- `off`: 検証なし
-- `constraint`: カラム名・型 + 全制約検証。PK 重複・FK は既存 VIEW に対する JOIN で検証
+- `off`: 行／列制約の検証なし（管理 Parquet の metadata 書き込みは必須）
+- `constraint`: カラム名・型 + 実行可能な単体制約検証。複数出力間の FK や横断 PK の実行相は #54 で確定
 
-FK 検証は読み取りスコープに依存する。write_table の FK 検証は、参照先テーブルがそのステージの読み取りスコープ（inputs 由来の上流閉包）に VIEW として存在する場合にのみ実行できる。したがって FK で参照するテーブルを生成する上流ステージは inputs に含めることを要件とする。inputs に含めず参照先がスコープ外となる場合、その FK は write 時に検証されない既知の限界として扱い、リポジトリ全体を横断する `staqkit validate` の FK 整合性検査で補完する。
+FK 検証は読み取りスコープに依存する。write_table の FK 検証は、参照先テーブルがそのステージの読み取りスコープ（明示された `inputs.tables`）に VIEW として存在する場合にのみ実行できる。したがって FK で参照するテーブルを生成する参照する上流 artifact は `inputs.tables` に明示する。入力 artifact に宣言せず参照先がスコープ外となる場合、その FK は write 時に検証されない既知の限界として扱い、リポジトリ全体を横断する `staqkit validate` の FK 整合性検査で補完する。
 
 検証は read-only の `fetch` の表現力だけで閉じる。書き込み候補データの FK 値を `VALUES` 句／`params` でインライン化し、参照先 VIEW への anti-join（候補側にあって参照先にない値を拾う `LEFT JOIN ... WHERE 参照先キー IS NULL` 相当）で違反行を検出する。候補フレームを VIEW として登録する経路は不要であり、利用者が持つ QueryEngine が read-only で register を持たない（[エンジンの二相](#エンジンの二相-enginebuilder-と-queryengine)）という不変条件と整合する。anti-join では候補側 FK 値が NULL の行を対象から除外する。SQL 標準の FK は NULL を違反としない（参照は「値があるなら参照先に存在せよ」の制約）ため、NULL を含めると anti-join がそれらを誤検出してしまう。NULL を許さない FK は NOT NULL 制約検査が別途捕捉するため、この除外で検証に穴は空かない。
 
@@ -486,10 +461,10 @@ Protocol は VIEW ベースを前提とする。TABLE 対応は将来のパフ�
 
 ## 外部データアクセス
 
-外部リポジトリから取り込んだデータ（`data/external/<repo>/`）は DataStore へ直接は載せない。ローカル生データと同じくソースとして扱い、下流の取り込みステージが `extra_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[external-data.md](external-data.md)）。これにより DataStore は外部由来かどうかを一切知らずに済み、外部スキーマを転送・解釈する仕組みも不要になる。取り込みステージを通さず外部データを直接クエリすることは想定しない。
+外部リポジトリから取り込んだデータ（`data/external/<repo>/`）は DataStore へ直接は載せない。ローカル生データと同じくソースとして扱い、下流の取り込みステージが `path_deps` でファイルとして読み込み、加工結果を当該プロジェクト自身の `config/table_schemas/` に従って DataStore に登録する（[external-data.md](external-data.md)）。これにより DataStore は外部由来かどうかを一切知らずに済み、外部スキーマを転送・解釈する仕組みも不要になる。取り込みステージを通さず外部データを直接クエリすることは想定しない。
 
 ### 非 Parquet データの発見
 
-バイナリファイル（ML モデル等）を DataStore 経由で発見可能にするパターン: パスを格納した Parquet（`add_datastore: true`）+ バイナリ本体（`add_datastore: false`）。DataStore で「どのモデルがどこにあるか」を検索し、実体はパスで直接アクセス。
+バイナリファイル（ML モデル等）を DataStore 経由で発見可能にするパターン: パスを格納した Parquet（`table` 指定あり）+ バイナリ本体（`table` 指定なし）。DataStore で「どのモデルがどこにあるか」を検索し、実体はパスで直接アクセス。
 
-外部ツール出力（モーションキャプチャの trc/tsv、c3d→csv 等、[#6](https://github.com/sakashita44/staqkit/issues/6)）も同じパターンで扱う。実体ファイルを `add_datastore: false` の out として宣言し、パスを格納した sidecar parquet（`add_datastore: true`）を併設して DataStore から発見可能にする。取り込みステージ（`staqkit add-stage --template ingest`）の雛形がこの構成を生成する。
+外部ツール出力（モーションキャプチャの trc/tsv、c3d→csv 等、[#6](https://github.com/sakashita44/staqkit/issues/6)）も同じパターンで扱う。実体ファイルを `table` 指定なし の out として宣言し、パスを格納した sidecar parquet（`table` 指定あり）を併設して DataStore から発見可能にする。取り込みステージ（`staqkit add-stage --template ingest`）の雛形がこの構成を生成する。
