@@ -2,13 +2,13 @@
 
 ## プロジェクト
 
-staqkit はファイルベースの実験データ解析を対象とする Python パッケージ。目指す性質と管理範囲は `docs/requirements.md` に記述する。
+staqkit はファイルベースの実験データ解析を対象とする Python パッケージである。目指す性質と管理範囲は `docs/requirements.md` に示す。
 
-`src/staqkit/` は初期状態であり、公開CLI・解析ランタイムは未実装。実在しない内部クラスやモジュール構成を前提にしないこと。
+`src/staqkit/` は初期状態であり、公開CLI・解析ランタイムは未実装である。実在しない内部クラスやモジュール構成を前提にしないこと。
 
 ## 開発コマンド
 
-初回のセットアップで、依存関係を同期し、pre-commit フックを有効化する。
+初回のセットアップでは、依存関係を同期し、pre-commit フックを有効化する。
 
 ```bash
 uv sync
@@ -22,7 +22,7 @@ uv run pytest
 uv run pyright
 ```
 
-Python 依存関係の追加・削除は `uv add` / `uv remove` を使用する。
+Python 依存関係の追加・削除には `uv add` / `uv remove` を使用する。
 
 ## 設定
 
