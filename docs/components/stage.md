@@ -2,180 +2,128 @@
 
 ## stage.yaml 仕様
 
-各ステージの定義ファイル。パラメータ・入力仕様・説明を1ファイルに集約する。
+各ステージの定義ファイル。実装より先に、出力 artifact、入力 artifact、パラメータ束縛、追加のパス依存を宣言する。
 
 ```yaml
 # stages/detect_cog_event/stage.yaml
-
 desc: "COG軌跡・速度を基準にPGTイベントを検出"
-
 status: active # active | planned | inactive
 
 outs:
-    timeseries:
-        path: timeseries.parquet
-        add_datastore: true
-    dtype:
-        path: dtype.parquet
-        add_datastore: true
+    event:
+        path: events.parquet
+        table: timeseries
     summary_figure:
         path: figures/summary.png
-        add_datastore: false
 
 params:
     cog_pgt_threshold: { file: params/detect.yaml, key: cog_pgt_threshold }
-    cog_vel_thresholds: { file: params/detect.yaml, key: cog_vel_thresholds }
 
 inputs:
-    - source_stage: compute_cog_velocity
+    tables:
+        - { stage: compute_cog_velocity, out: velocity }
+        - { stage: import, out: dtype }
+    files:
+        calibration: { stage: prepare, out: calibration_model }
 
-extra_deps:
+path_deps:
     raw_data: data/external/raw/motion
+    signal_utils: libs/signal_utils.py
 ```
 
 ### セクションの役割
 
-| セクション | 役割                                                  | DVC連携                                                     |
-| ---------- | ----------------------------------------------------- | ----------------------------------------------------------- |
-| desc       | ステージの1行説明                                     | dvc.yaml の desc フィールドに転記                           |
-| status     | ステージの状態（active / planned / inactive）         | planned は data/ 側未生成。inactive は下流に伝搬            |
-| outs       | 全出力宣言（path + add_datastore フラグ）             | dvc.yaml の outs: に展開。上流の outs は下流の deps: に展開 |
-| params     | 外部 params ファイルのキーへの束縛（ローカル名 → 値） | dvc.yaml の params: で参照先キーを追跡                      |
-| inputs     | 依存先ステージの宣言                                  | dvc.yaml の params: + deps: で追跡                          |
-| extra_deps | DAG外の外部ファイル/ディレクトリ依存                  | dvc.yaml の deps: に展開                                    |
+| セクション | 宣言するもの | DVC への展開 |
+| --- | --- | --- |
+| `outs` | 自ステージが生成する名前付き artifact（任意の `table` で DataStore 登録） | `outs` |
+| `inputs.tables` | 他ステージが生成する **table artifact** の選択 | 選択した artifact のファイルを `deps`、使用する DDL を `params` |
+| `inputs.files` | 他ステージが生成する artifact のファイルアクセス用参照（ローカル名付き） | 選択した artifact のファイルを `deps` |
+| `path_deps` | パスで明示する外部データ・追加コード・ファイル／ディレクトリ | `deps` |
+| `params` | 外部パラメータファイルのキーへの束縛 | キー単位の `params` |
+| `status` / `desc` | 状態／説明 | ステージ包含判定／`desc` |
+
+`dvc.yaml` は派生物であり、依存する対象はこれらの宣言を合わせて導出し重複排除する。
 
 ### outs 統一スキーマ
-
-全出力を `outs` セクションに統一する。各エントリは `path`（出力先）と `add_datastore`（DataStore の VIEW（クエリエンジン上の仮想テーブル）への統合有無）を持つ。
 
 ```yaml
 outs:
     <key>:
-        path: <相対パス> # 必須。末尾 / でディレクトリ出力
-        add_datastore: <bool> # 必須。true → DataStore VIEW に統合
+        path: <相対パス> # 必須。data/stages/<stage>/ からの相対パス
+        table: <論理テーブル名> # 任意。指定時だけ DataStore 管理対象
 ```
 
-- 展開先: `data/stages/{name}/{path}`
-- key はプログラム上の識別子（`stage.out_path("<key>")` でパス解決）。ファイル名ステムとの一致を推奨
-- DataStore VIEW のテーブル名はファイル名ステムから導出（例: `timeseries.parquet` → `timeseries` VIEW）
-- 将来の拡張（`cache: false` 等）は value オブジェクトにフィールド追加で対応
-
-各エントリは `OutsEntry`（frozen dataclass）として型付けし、key を内包して自己完結させる。
-
-```python
-@dataclass(frozen=True)
-class OutsEntry:
-    key: str            # outs の辞書キー。プログラム上の識別子
-    path: Path          # data/stages/{name}/ からの相対パス
-    add_datastore: bool
-
-    @property
-    def table_name(self) -> str:
-        """DataStore VIEW のテーブル名。add_datastore: true の場合のみ意味を持つ"""
-        return self.path.stem
-```
-
-`StageDefinition.outs` は `list[OutsEntry]` として保持し、key の一意性はパース時に検証する。key（プログラム上の識別子）と `table_name`（VIEW 名 = ステム）を分離するのは、テーブルとそれに対応する非テーブル出力（同じステムを持つ図など）を同一ステージから出力する場合にステムが衝突しうるためである。
-
-バリデーション規則:
-
-- `add_datastore: true` かつ拡張子 ≠ `.parquet` → エラー
-- `add_datastore: true` かつディレクトリ（末尾 `/`）→ エラー
-- key とファイル名ステムの不一致 → warning
+- `key` は公開される artifact identity の一部であり、他のステージは `{stage, out}` で参照する。自ステージのコードは `stage.out_path("<key>")`、管理テーブルは `store.write_table("<key>", df)` で出力する。
+- `path` は任意のファイル名でよい。**拡張子／ファイル名 stem からテーブル名を推論しない。**
+- `table` を宣言した出力だけが DataStore に参加し、同名の `TableSchemaSet` 定義を必須とする。現行の `add_datastore` フラグは廃止する。
+- `table` を省略した出力は、拡張子にかかわらず通常の DVC artifact。非管理 Parquet も `table: null` などの特例宣言を要しない。未宣言の table artifact を DataStore に暗黙登録することもない。
+- `table` を持つ出力は Parquet ファイルとし、書き込み時に論理テーブル名と DDL の SHA-256 を Parquet key-value metadata に必ず記録する。詳細は [datastore.md](datastore.md#parquet-metadata-の契約)。
+- `table` があるのにスキーマが存在しない／非 Parquet／ディレクトリ指定 → 宣言検証でエラー。`key` 重複・出力パス重複もエラー。
+- 既存の `OutsEntry.table_name = path.stem` は廃止し、`table_name: str | None` を明示宣言から取得する。
 
 ### params と inputs の関心の分離
 
-| 依存の種類                                   | 宣言場所                                  | DVC 追跡経路        |
-| -------------------------------------------- | ----------------------------------------- | ------------------- |
-| どのステージに依存するか（DAG 構造）         | stage.yaml inputs                         | params + deps       |
-| パラメトリックな制御値                       | stage.yaml params（外部ファイルへの束縛） | params              |
-| どのデータをどう取得するか（クエリロジック） | run.py                                    | deps（run.py 変更） |
-
-- **params**: 処理制御値への束縛。値は外部 params ファイルが持ち、stage.yaml はローカル名から参照先キーへの束縛を宣言する。参照先キーの値変更 → 再計算
-- **inputs**: 依存先ステージ名（`source_stage`）のみ宣言。DAG の辺の宣言 + DVC params 追跡の2つの役割を持つ
-- クエリ条件は run.py 内で開発者が直接記述する。フィルタ条件をパラメータとして変更可能にしたい場合は params に束縛を宣言し、run.py 内で `stage.params` 経由で使用する
+- `params` は計算に使う制御値を、外部ファイルの `(file, key)` に束縛する。利用側は `stage.params["<local_name>"]` で値を得る。
+- `inputs` は別ステージが公開した artifact の identity `(stage, out)` を選択する。処理コードによるクエリ条件の指定とは別。
+- `path_deps` は artifact identity を持たない物理パスへの依存や追加ソースコードの追跡であり、通常の `params` や選択済み `inputs` を重ねて書かない。
 
 ### inputs の形式
 
 ```yaml
 inputs:
-    - source_stage: D
-    - source_stage: X
+    tables:
+        - { stage: import, out: joint_angle }
+        - { stage: import, out: dtype }
+    files:
+        model: { stage: train, out: checkpoint }
 ```
+
+- `tables` はローカル alias を持たないリスト。同じ入力 artifact の `outs.<key>.table` を参照して DataStore の VIEW に登録する。未宣言の artifact は VIEW へ含めない。
+- `files` はローカル名から artifact identity への辞書。`stage.input_path("model")` で宣言先の出力パスを解決する。`table` のない artifact も参照できる。
+- 同一 artifact を `tables` と `files` の両方に記載してよい。DVC `deps` は重複排除する。`files` だけの指定で DataStore の可視範囲は広がらない。
+- 別の stage 名／out key の不在や、`tables` から `table` 未宣言の出力への参照は、`validate`／実行前の参照整合性検査でエラー。
+- `run.py` の通常の読み取りは `store.query("timeseries", ...)` のようにテーブル名とデータ内識別子で行い、`inputs.tables` の物理パスや別名をコードに出さない。
 
 ```python
 def run(stage: StageInfo, store: DataStore):
-    cog = store.query("timeseries", {"dkey": stage.params["target_dkeys"]})
-    force = store.query("timeseries", {"dkey": ["force_x", "force_y"]})
-    dtypes = store.query("dtypes")
-    result = process(cog, force, dtypes, **stage.params)
-    store.write_table("result", result)
+    angles = store.query("timeseries", {"dkey": ["angle_x"]})
+    model = load_model(stage.input_path("model"))
+    output = process(angles, model, **stage.params)
+    store.write_table("result", output)
 ```
-
-inputs の役割:
-
-| 役割            | 仕組み                                         |
-| --------------- | ---------------------------------------------- |
-| DAG の辺の宣言  | source_stage → pipeline-gen が deps を自動導出 |
-| DVC params 追跡 | source_stage の追加・削除で再実行トリガー      |
 
 ### DataStore スコープと status の関係
 
-| status  | inputs                | DataStore スコープ                     | dvc.yaml |
-| ------- | --------------------- | -------------------------------------- | -------- |
-| planned | 未記述                | 全データ（末端相当）                   | 含めない |
-| planned | source_stage 記述済み | 絞らない（DAG 可視化のみに使用）       | 含めない |
-| active  | 記述済み              | 宣言した source_stage 群の全上流に限定 | 含む     |
-| active  | 未記述                | 空（DataStore へのアクセス時にエラー） | 含む     |
+| status | DataStore の可視範囲 | dvc.yaml |
+| --- | --- | --- |
+| active | `inputs.tables` で選択した artifact だけ（上流閉包へ拡張しない） | effective-active の場合に含める |
+| planned | 実データなしでも入出力宣言を記述できる。探索時の可視範囲は読み取り専用 `open_scoped_store` を使う | 含めない |
+| inactive | 実行対象外 | 含めない |
 
-- active かつ inputs 未記述の場合、DataStore にデータが登録されないため、クエリ実行時にエラー。inputs 不要でクエリも行わないステージ（外部データの取り込み等）は正常に実行される
-- planned + inputs 未記述 → DAG 上で浮いた位置に表示
-- planned + source_stage 記述済み → その先に点線で表示（スコープは絞らない）
+active で `inputs.tables` が空なら DataStore の読み取り VIEW も空。生データ取り込みなど DataStore 入力を要しないステージは実行可能。
 
 ### active が planned を参照した場合
 
-active ステージが inputs の source_stage で planned ステージ（データ実体なし）を参照する状態は、「実行可能なステージが未実装の依存に依存する」設計矛盾を表す。検査は実際に実行されるステージ（effective-active）に対してのみ発火する。ここで effective-active とは宣言 active かつ [suppressed](#宣言的状態と実効状態) でない状態を指し、dvc.yaml に含まれないステージ（planned・inactive・suppressed）は発火対象から外れる。したがって planned から planned への参照は対象外となる（DAG 可視化目的の参照として許容する）。これは特例ではなく、同一ルールが「実行されないステージには発火しない」帰結である。
+active（effective-active）のステージが `inputs.tables` または `inputs.files` から planned の artifact を参照した場合、`staqkit validate` は警告、`staqkit repro` は実行前に `ReferenceIntegrityError`。planned 同士の参照は設計中の構造として許容する。inactive を参照する active は従来どおり suppressed 扱いとする。
 
-- `staqkit validate`（設計時レビュー）: 警告。issue 駆動開発で下流を先に定義し上流を順次実装する途中段階を許容し、編集を止めない
-- `staqkit repro`（実行ゲート）: エラー。planned の参照先 outs は実体がなく active ステージは実行できないため、DVC 呼び出し前に `ReferenceIntegrityError` で停止する
+### 入力宣言漏れの既知の限界
 
-この段階差は[アクセス経路の保証グラデーション](../architecture.md#守る契約とアクセス経路の保証グラデーション)と同じ思想であり、設計時は緩く、実行時に硬く扱う。
+必要な artifact の宣言漏れは、VIEW 内のデータが不足していてもクエリ自体は成功する場合がある。staqkit は必要な全データを解析コードから推定できない。宣言の網羅性は解析者の責務であり、出力を確認する必要がある。
 
-planned を参照する active が repro でエラー停止するのに対し、inactive を参照する active は [inactive 伝搬](#inactive-伝搬と-suppressed-状態)で suppressed となり、エラーにならず dvc.yaml から静かに除外される。この非対称は、inactive が「意図的な休止（上流を active に戻せば下流も自動復帰）」を表すのに対し、planned は「未実装（参照先の実体がそもそも存在しない）」を表すという意味の違いに由来する。前者は復帰可能な一時状態として伝搬で扱い、後者は依存の欠落として実行時に顕在化させる。
-
-### source_stage 指定漏れの既知の限界
-
-source_stage の指定漏れは「データの不在」ではなく「データの不足」を引き起こす。スコープ内のデータだけでクエリが成功し、エラーなく処理が完了するが、本来必要なデータが静かに欠落した不完全な結果が出力される可能性がある。
-
-これは「何が必要か」が解析者の頭の中にしかない問題であり、inputs の形式をどう変えても解決しない種類の問題として受容する。ステージを適切な粒度で設計すること、DAG 図で依存経路の欠落を視覚的に確認すること、run.py で明示的にクエリを書いて結果を確認することが軽減策となる。
-
-将来的に `staqkit lint` 等で「run.py 内の query 呼び出しで参照するテーブル名」と「inputs の source_stage が提供するテーブル名」の突合チェックを提供できれば、静的に検出可能なケースは拾える。
-
-### extra_deps: DAG外の外部依存
-
-自動導出されるdeps（run.py・上流outs・table_schemas）に該当しない外部ファイルやディレクトリを明示的に宣言する。
+### path_deps: 物理パスで指定する追加依存
 
 ```yaml
-extra_deps:
-    raw_data: data/external/raw/motion # ディレクトリ指定
-    calibration: data/external/raw/calibration.csv # ファイル指定
-    lib_utils: libs/signal_utils.py # 共有スクリプト
-    upstream_b: data/external/labA/b.parquet # 外部 import データ（ソース扱い）
+path_deps:
+    raw_data: data/external/raw/motion
+    calibration: data/external/raw/calibration.csv
+    signal_utils: libs/signal_utils.py
 ```
 
-- globパターン（`*`, `?` 等を含む値）はジェネレータがPythonの `glob.glob()` で展開
-- glob パターンが 0 件マッチの場合はエラー（`ConfigError`）。リテラルパスの不在は DVC が deps 不在として検出するが、glob は展開結果が空になるとジェネレータが何も出力せず DVC からは見えないため、依存欠落を静かに見逃さないよう生成時に検出する
-- ディレクトリ指定はDVCネイティブの挙動（中のファイル全体をハッシュ追跡）
-- dvc.yaml の deps のみに展開。params には含めない
-- 外部リポジトリから取り込んだデータ（`data/external/<repo>/`）も生データと同じくここで宣言し、取り込みステージがソースとして読む（[external-data.md](external-data.md)）
-
-解析コードからは `stage.extra_dep("<key>")` でパスを解決する。stage.yaml がパス定義のSSoTであり、DVC deps と解析コードの両方が同一の値を参照する。StageInfo・DataStore の定義は[実行モデル](#実行モデル)を参照。
-
-```python
-def run(stage: StageInfo, store: DataStore):
-    raw_dir = stage.extra_dep("raw_data")      # → Path("data/external/raw/motion")
-    cal_file = stage.extra_dep("calibration")   # → Path("data/external/raw/calibration.csv")
-```
+- リポジトリルート相対のファイル／ディレクトリ／glob を DVC `deps` に展開。glob の 0 件マッチは生成時にエラー。
+- `stage.path_dep("raw_data")` で宣言されたリテラルパスを取得できる。共有 Python モジュールのように、変更追跡だけが必要な依存はコードからパス取得しなくてもよい。
+- `run.py` 自体は自動追跡する。外部パラメータファイルは `params` でキー単位に追跡するため `path_deps` に重複宣言しない。
+- `uv` / `pip` 等で管理する外部パッケージや環境ロックファイルは、標準で DVC dependency に加えない。Git と環境管理ツールによる記録に委ねる。環境を変えただけでは DVC の自動再実行は発生しない（手動で再実行した結果が変わる場合の追跡とは別）。必要な場合に限り明示的な `path_deps` を許す。
+- 直接パスで入力を変更することは非推奨だが、staqkit は任意の Python コードによる改変を禁止しない。その場合の再現性・DVC 整合性は保証しない。実行時の改変検知警告は有用性とコストを確認してから任意に検討し、必須機構とはしない。
 
 ### params（外部ファイル参照）
 
@@ -232,7 +180,7 @@ issue駆動開発（最終成果物から逆算してノードを定義 → 順�
 planned 段階で書ける情報:
 
 - **stage.yaml の outs**: 出力予定テーブル一覧
-- **テーブルデータ**: `add_datastore: true` のテーブルは実装前に手動配置可能（出力IFの事前定義）
+- **テーブルデータ**: `table` を宣言した出力は、実データの生成前にスキーマと出力 IF を定義できる
 - **データテーブル**: データ実体がないので未生成
 
 ### 孤児データの管理
@@ -251,27 +199,29 @@ staqkit clean --remove     # 確認の上、実際に削除
 
 ステージの永久削除は、下流の参照を先に解消してから行う。
 
-- 下流が `source_stage` で当該ステージを参照したまま削除すると、参照整合性検査が参照先不在を検出してエラーになる（警告のみで通す緩和経路は設けない）
+- 下流が `inputs.tables`／`inputs.files` で当該ステージの artifact を参照したまま削除すると、参照整合性検査が参照先不在を検出してエラーになる（警告のみで通す緩和経路は設けない）
 - 手順: 下流ステージの inputs から当該参照を除く（または代替ソースへ繋ぎ替える）→ `stages/xxx/`・`data/stages/xxx/` を削除 → `staqkit clean` で残る孤児データを整理
 - 可逆な休止が目的なら削除でなく inactive を用いる（[inactive 伝搬](#inactive-伝搬と-suppressed-状態)。上流を active に戻せば下流も自動復帰する）
 
 ## ステージ出力の構成
 
-各DVCステージは `data/stages/xxx/` 配下にファイルを出力する。`add_datastore: true` のファイルは DataStore の VIEW に統合される。1ステージが複数テーブルを出力可能。
+各 DVC ステージは `data/stages/xxx/` 配下に artifact を出力する。`outs.<key>.table` が宣言された Parquet のみ DataStore の VIEW に統合される。1ステージが複数 artifact、同じ論理テーブルに属する複数 artifact を出力してよい。
 
 ## 分散テーブルの統合
 
-同名テーブルを複数ステージが出力するパターンがある。DataStore はこれらを UNION ALL で1つの VIEW に統合する。
+異なる artifact が同じ `outs.<key>.table` を宣言していれば、DataStore は**その run.py が `inputs.tables` に指定した artifact に限り** UNION ALL で1つの VIEW に統合する。
 
 ```text
-data/stages/import/timeseries.parquet       ← import ステージが出力
-data/stages/normalize/timeseries.parquet    ← normalize ステージが出力
-→ DataStore: timeseries VIEW（UNION ALL）
+import/joint_angle  → data/stages/import/joint_angle.parquet  (table: timeseries)
+import/fsr          → data/stages/import/fsr.parquet          (table: timeseries)
 ```
 
-- SSoT は各ステージの出力ファイルであり、静的な設定ファイルではない
-- `config/table_schemas/` の [DDL 定義](datastore.md#テーブル結合のスキーマ契約)に基づき、UNION ALL 後のキー一意性等を検証
-- カタログ出力: `staqkit catalog` で対象テーブルの内容を一覧表示（詳細は [CLI リファレンス](cli.md#staqkit-catalog) を参照）
+例えば `joint_angle` だけを宣言した consumer に FSR の行は見えない。両方を宣言した場合は `timeseries` VIEW に UNION ALL する。ファイル名はテーブル名と無関係。個別 artifact の schema / metadata を VIEW 作成前に照合する。
+
+同じ論理テーブルの artifact 間で PK が衝突してはならない（[#38](https://github.com/sakashita44/staqkit/issues/38)）。同一 stage の出力間 FK や stage 横断 PK の検証相は [#54](https://github.com/sakashita44/staqkit/issues/54) で決める。
+
+- 出力は artifact ごとに独立して DVC 追跡されるが、DVC stage 自体の実行単位を出力ごとに分割する必要はない。
+- カタログ出力は `staqkit catalog` を用いる（[CLI リファレンス](cli.md#staqkit-catalog)）。
 
 ### DAG循環の回避
 
@@ -326,7 +276,7 @@ README に書かないもの（他所がSSoT）: パラメータ値（→ stage.
 
 | 要素              | 種別             | 責務                                                                                   |
 | ----------------- | ---------------- | -------------------------------------------------------------------------------------- |
-| StageInfo         | frozen dataclass | stage.yaml パース結果 + パス解決済みランタイム情報。params, out_path(), extra_dep() 等 |
+| StageInfo         | frozen dataclass | stage.yaml パース結果 + パス解決済みランタイム情報。params, out_path(), input_path(), path_dep() 等 |
 | DataStore         | クラス           | 読み書き + バリデーションの単一アクセスポイント                                        |
 | run_stage(run_fn) | 関数             | ブートストラップ → run_fn(stage, store) → エピローグ                                   |
 
@@ -345,10 +295,10 @@ StageDefinition は stage.yaml をパースした frozen dataclass であり、�
 | status     | active / planned / inactive            | stage.yaml `status`     |
 | outs       | `list[OutsEntry]`                      | stage.yaml `outs`       |
 | params     | パラメータ辞書                         | stage.yaml `params`     |
-| inputs     | source_stage のリスト                  | stage.yaml `inputs`     |
-| extra_deps | key → パスの辞書                       | stage.yaml `extra_deps` |
+| inputs     | tables の artifact refs と files のローカル名 → artifact refs | stage.yaml `inputs` |
+| path_deps  | key → パスの辞書                       | stage.yaml `path_deps` |
 
-StageInfo は StageDefinition に [ProjectLayout](../architecture.md#projectlayout) を束ねた実行時ビューであり、`out_path()` / `extra_dep()` 等のパス解決を ProjectLayout へ委譲する。単一ステージの run.py 文脈に注入されるのは StageInfo、グラフ走査に用いるのは StageDefinition、と用途で使い分ける。
+StageInfo は StageDefinition に [ProjectLayout](../architecture.md#projectlayout) を束ねた実行時ビューであり、`out_path()` / `input_path()` / `path_dep()` 等のパス解決を ProjectLayout へ委譲する。単一ステージの run.py 文脈に注入されるのは StageInfo、グラフ走査に用いるのは StageDefinition、と用途で使い分ける。
 
 StageInfo は status によって挙動を変えない。planned/active の区別はオーケストレーション層（dvc.yaml 生成時に planned ステージを除外する等）の責務である。
 
@@ -363,13 +313,13 @@ from staqkit.types import StageInfo, DataStore
 def run(stage: StageInfo, store: DataStore):
     df = store.query("timeseries", {"subject_id": [1, 2]})
     result = normalize(df, **stage.params)
-    store.write_table("timeseries", result)
+    store.write_table("result", result)
 
 if __name__ == "__main__":
     run_stage(run)
 ```
 
-`store.query` が契約検証つきの祝福されたメイン経路、`store.fetch` が生 SQL の抜け道である（保証の差は [datastore.md](datastore.md#読み取り-api)）。
+`store.write_table()` は現在の stage に宣言された `outs` artifact key を受け取る（テーブル名ではない）。`store.query` が契約検証つきの祝福されたメイン経路、`store.fetch` が生 SQL の抜け道である（保証の差は [datastore.md](datastore.md#読み取り-api)）。
 
 ### post-run 検証
 
@@ -378,7 +328,7 @@ run_stage のエピローグで実施する検証。
 | 検証項目                                 | 担当                  | タイミング                                       |
 | ---------------------------------------- | --------------------- | ------------------------------------------------ |
 | outs の変更追跡（ハッシュベース）        | DVC                   | dvc repro / dvc status                           |
-| スキーマ整合性（カラム構成 vs DDL 定義） | DataStore write_table | 書き込み時（on_write バリデーション）            |
+| スキーマ構造・Parquet metadata | DataStore write_table / 入力構築 | 管理テーブル artifact ごと。横断的な制約検証の相は #54 で判断 |
 | 未生成ファイル（declared − actual）      | run_stage エピローグ  | ステージ実行後 → 例外 → DVC 停止                 |
 | 未宣言ファイル（actual − declared）      | run_stage エピローグ  | ステージ実行後 → 警告（post_run で例外昇格可能） |
 
