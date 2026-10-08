@@ -2,7 +2,8 @@
     // 除外対象は .gitignore から取る (markdownlint-cli2 は .markdownlintignore を読まない)
     "gitignore": true,
     // .gitignore の内容に依らず常に除外するもの
-    "ignores": ["node_modules/**", ".venv/**", ".dvc/**"],
+    // CLAUDE.md は AGENTS.md を取り込む `@AGENTS.md` の 1 行のみであり、見出しを含まない (MD041 と両立しない)
+    "ignores": ["node_modules/**", ".venv/**", ".dvc/**", "CLAUDE.md"],
     "config": {
         // デフォルトは全ルール有効
         "default": true,
