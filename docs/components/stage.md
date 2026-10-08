@@ -55,7 +55,7 @@ outs:
 
 - `key` は公開される artifact identity の一部であり、他のステージは `{stage, out}` で参照する。自ステージのコードは `stage.out_path("<key>")`、管理テーブルは `store.write_table("<key>", df)` で出力する。
 - `path` は任意のファイル名でよい。**拡張子／ファイル名 stem からテーブル名を推論しない。**
-- `table` を宣言した出力だけが DataStore に参加し、同名の `TableSchemaSet` 定義を必須とする。現行の `add_datastore` フラグは廃止する。
+- `table` を宣言した出力だけが DataStore に参加し、同名の `TableSchemaSet` 定義を必須とする。旧 `add_datastore` フラグは廃止する。`table` は指定時に空でないテーブル名でなければならず、明示的な `table: null` は無効とする。
 - `table` を省略した出力は、拡張子にかかわらず通常の DVC artifact。非管理 Parquet も `table: null` などの特例宣言を要しない。未宣言の table artifact を DataStore に暗黙登録することもない。
 - `table` を持つ出力は Parquet ファイルとし、書き込み時に論理テーブル名と DDL の SHA-256 を Parquet key-value metadata に必ず記録する。詳細は [datastore.md](datastore.md#parquet-metadata-の契約)。
 - `table` があるのにスキーマが存在しない／非 Parquet／ディレクトリ指定 → 宣言検証でエラー。`key` 重複・出力パス重複もエラー。
