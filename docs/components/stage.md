@@ -266,7 +266,7 @@ import/fsr          → data/stages/import/fsr.parquet          (table: timeseri
 
 README に書くもの: アルゴリズムの説明、ドメイン固有のロジック、設計経緯の短縮版、既知の制限・注意点
 
-README に書かないもの（他所がSSoT）: パラメータ値（→ stage.yaml）、入出力ファイル（→ dvc.yaml）、前後のステージ（→ `staqkit dag`）
+README に書かないもの（他所がSSoT）: パラメータの実値（→ 外部 params ファイル）、入出力 artifact の宣言（→ stage.yaml）、前後のステージ（→ `staqkit dag`）
 
 ## 実行モデル
 
