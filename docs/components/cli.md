@@ -40,7 +40,7 @@ staqkit add-stage <path> [--status <active|planned|inactive>] [--template <defau
 
 - 生成後に dvc.yaml を再生成する。`git add` の対象は新規ステージ配下の生成物（stage.yaml・run.py）と dvc.yaml のみ（[pipeline-gen.md](pipeline-gen.md#整合性の維持)）。
 - `--status`: 初期状態（既定: planned。宣言の先行＝実体に先立つ宣言と整合）。
-- `--template`: run.py 雛形の種別。`default` は通常ステージ（`store.query` → 加工 → `store.write_table`）、`ingest` は生データ・外部 import データをソースとして取り込む取り込みステージ（`extra_deps` でソースを受け、非 Parquet 出力は `add_datastore: false`、パスを格納した sidecar parquet で DataStore から発見可能にする。[external-data.md](external-data.md)、[#6](https://github.com/sakashita44/staqkit/issues/6)）。
+- `--template`: run.py 雛形の種別。`default` は通常ステージ（`store.query` → 加工 → `store.write_table`）、`ingest` は生データ・外部 import データをソースとして取り込む取り込みステージ（`path_deps` でソースを受け、非テーブル出力は `table` を宣言しない、パスを格納した sidecar parquet で DataStore から発見可能にする。[external-data.md](external-data.md)、[#6](https://github.com/sakashita44/staqkit/issues/6)）。
 - 既存ステージ（同一パス）と重複する場合はエラー終了する。
 
 テンプレートはパッケージに同梱し、バージョン更新で改善が伝播する（プロジェクト側に焼かない。[distribution.md](../distribution.md#雛形と改善の伝播)）。`add-table` 等の他の add 系コマンドは設けない（table schema は単一 YAML で `staqkit schema` により内省でき scaffold 価値が低く、CLI の契約面を不要に増やさないため）。実装時の詳細は [#7](https://github.com/sakashita44/staqkit/issues/7) で追跡する。
@@ -58,10 +58,10 @@ staqkit validate --target descriptions # description 網羅検査のみ
 
 引数なしで横断的なフルチェックを実行する。全検査群を回す `staqkit validate` が保証の本体であり、[A3（引き継ぎ）・A5（公開）](https://github.com/sakashita44/staqkit/discussions/50)のゲートはこれに依存する。`--target` は編集ループ中に「いま触っている部分だけ」を回すための便宜フィルタであり、検査群の網羅的な列挙でも硬い契約でもない。検査群が増えても、単独実行したい編集ループの局面がある場合にだけ既存のいずれかへ寄せ、なければフル実行に委ねる。トップレベルの検査コマンドは増やさず、`staqkit validate` を統合エントリに保つ。
 
-検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない同居ファイルは staqkit から不可視で、生のファイルパス経由でのみ読める。`outs` に `add_datastore: true` で宣言した出力はスキーマ検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければ error となる。`add_datastore: false` の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
+検査対象は宣言範囲に限る。stage.yaml の `outs`・そこで参照される table_schemas・params 束縛が宣言範囲を成し、宣言していない artifact は DataStore から不可視。一般の Python コードによる物理パスへの直接アクセス自体は禁止しない。`outs` に `table` を宣言した で宣言した出力はスキーマ・Parquet metadata 検査対象となり、対応する table_schema（`config/table_schemas/` 配下の定義）がなければ error となる。`table` を宣言しない の出力はスキーマ検査対象外。導入の深浅は宣言した量の差であり、宣言範囲の error を解消すればその範囲で保証が成立する。
 
-- 参照整合性（source_stage の実在確認・循環検出、params 束縛先 `file`・`key` の実在確認）: `--target references`
-- スキーマ整合性（Parquet ファイル vs `config/table_schemas/`）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
+- 参照整合性（入力 stage/out key の実在・table 種別・循環検出、params 束縛先 file/key の実在確認）: `--target references`
+- スキーマ整合性（管理 Parquet metadata とカラム型 vs `config/table_schemas/` の DDL）+ TableSchemaSet 整合性（FK 参照先の存在・型一致）: `--target schema`
 - description 網羅検査（説明欄充足・説明系ファイル存在）と column_descriptions 未記述の警告: `--target descriptions`
 
 宣言範囲の検査とは別に、フル実行は派生物の整合検査を一つ含む。パイプライン定義整合（dvc.yaml が stage.yaml 群からの生成結果と意味的に一致すること。[pipeline-gen.md](pipeline-gen.md#整合性の維持)）は宣言の中身ではなく生成物と宣言の同期を検査するもので、編集ループで単独実行する局面がないため `--target` の個別枠は設けない。
