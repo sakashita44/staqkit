@@ -10,7 +10,7 @@ config/                      ← Git管理（プロジェクト設定）
   table_schemas/             ← テーブルごとのスキーマ定義（サブディレクトリ許容）
     timeseries.yaml
     record.yaml
-    meta/                    ← サブディレクトリによる整理（テーブル名はファイル名で決まる）
+    meta/                    ← サブディレクトリによる整理（テーブル名はDDL の CREATE TABLE で決まる）
       dtype.yaml
 
 params/                      ← Git管理（パラメータ値）。推奨配置（強制ではない）
@@ -22,7 +22,7 @@ stages/                      ← Git管理（定義側）。再帰走査
   import/                    ← グループ（stage.yaml なし）
     raw_motion/              ← ステージ "import/raw_motion"
       run.py                 ← エントリポイント
-      stage.yaml             ← params 参照 + inputs + desc
+      stage.yaml             ← artifact 入出力 + params 参照 + desc
       README.md              ← アルゴリズム説明
     raw_force/
       run.py
@@ -41,7 +41,7 @@ data/                        ← DVC管理（成果物側）
   stages/                    ← ステージ出力。stages/ をミラー
     import/
       raw_motion/
-        timeseries.parquet   ← テーブル名.parquet
+        motion.parquet       ← ファイル名は論理テーブル名と独立
         record.parquet
         dtype.parquet
       raw_force/
@@ -71,15 +71,15 @@ data/                        ← DVC管理（成果物側）
 staqkit が走査・ミラー・呼び出しの起点とするため、配置と名前を規約として固定する。
 
 - `stages/` と各ステージの `stage.yaml` / `run.py`: ステージ発見は `stages/**/stage.yaml` の再帰走査、実行は `python stages/<stage>/run.py`。ディレクトリ名・ファイル名で位置と入口が決まる。
-- `config/table_schemas/` と配下の `*.yaml`: スキーマ発見は `config/table_schemas/**/*.yaml` の再帰走査。テーブル名はファイルステムで決まる。
+- `config/table_schemas/` と配下の `*.yaml`: スキーマ発見は `config/table_schemas/**/*.yaml` の再帰走査。テーブル名は DDL の `CREATE TABLE` と `outs.<key>.table` により決まり、出力ファイル名とは独立する。
 - `data/stages/<stage>/`: 出力先をステージ名から機械的に導出する（`stages/` のミラー）。
 - `config/project.yaml`: プロジェクト全体設定（`validation` 等）の置き場（[プロジェクト全体設定](#プロジェクト全体設定)）。
 
 ### 参考配置
 
-staqkit は `extra_deps` や params 束縛が宣言したパスをリポジトリルート相対で解決するだけで、これらの場所を前提にしない。配置は変更可能であり、構成図が示す位置は一覧性のための参考にすぎない。
+staqkit は `path_deps` や params 束縛が宣言したパスをリポジトリルート相対で解決するだけで、これらの場所を前提にしない。配置は変更可能であり、構成図が示す位置は一覧性のための参考にすぎない。
 
-- `libs/`: 共有コード。`extra_deps` が任意パスで宣言する（[libs](#libs共有コード)）。
+- `libs/`: 共有コード。`path_deps` が任意パスで宣言する（[libs](#libs共有コード)）。
 - params ファイル（`params/` 等）: stage.yaml の束縛が指すパスを解決する（[params](#paramsパラメータ値)）。
 - `data/external/`: DAG にとって外部のソース（どのステージも生成せず、取り込みステージが消費する）。ローカル生データも別リポジトリからの dvc import も同一カテゴリで、来歴強度のみが異なる（[external-data.md](components/external-data.md)）。
 - ステージ直下の `README.md`: アルゴリズム説明。staqkit は要求も走査もしない。
@@ -116,16 +116,18 @@ validation:
 - **ステージ名** = `stages/` からの相対パス（例: `import/raw_motion`）
 - **ステージ判定**: `stage.yaml` が存在するディレクトリがleafステージ。それ以外は純粋なグルーピング
 - **禁止ルール**: stage.yaml を持つディレクトリの下にサブステージ不可（ステージかつグループは不可）
-- **data/ ミラー**: `data/stages/import/raw_motion/timeseries.parquet`（stages/ 以下をそのまま反映）
-- **参照形式**: `source_stage: import/raw_motion`（パス形式）
+- **data/ ミラー**: `data/stages/import/raw_motion/motion.parquet`（stages/ 以下をそのまま反映）
+- **参照形式**: `{stage: import/raw_motion, out: joint_angle}`（stage 名と公開 out key）
 - **発見**: `stages/**/stage.yaml` を再帰走査。フラットとネストが共存可能
 
 ## libs（共有コード）
 
 複数ステージから参照する共有コード（ユーティリティ、シミュレーションモデル等）を置く。Git 管理。
 
-- ステージは `extra_deps` で `libs/...` を宣言して依存追跡する（[stage.md](components/stage.md#extra_deps-dag外の外部依存)）。変更は DVC が下流を無効化する。
-- 外部リポジトリで管理するコード/データは git submodule として `libs/<name>/` に配置できる。submodule コミットの更新が `extra_deps` 経由で DVC の変更検知に連動する。submodule を「生きたコード・データの共有」に使うのは、雛形コピー用途（不採用）とは別の用途であり distribution.md と整合する（[distribution.md](distribution.md#雛形と改善の伝播)）。
+- ステージは `path_deps` で `libs/...` を宣言して依存追跡する（[stage.md](components/stage.md#path_deps-物理パスで指定する追加依存)）。変更時の再実行要否は DVC が判断する。
+- 外部リポジトリで管理するコード/データは git submodule として `libs/<name>/` に配置できる。submodule コミットの更新が `path_deps` 経由で DVC の変更検知に連動する。submodule を「生きたコード・データの共有」に使うのは、雛形コピー用途（不採用）とは別の用途であり distribution.md と整合する（[distribution.md](distribution.md#雛形と改善の伝播)）。
+
+uv / pip で管理するパッケージや環境ファイルは標準では DVC に自動登録しない。Git とパッケージマネージャによる記録に委ねる。環境を変更しただけでは DVC が自動再実行するとは限らず、必要なときだけ `path_deps` に明示できる。
 
 ## params（パラメータ値）
 
