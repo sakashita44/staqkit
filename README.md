@@ -20,16 +20,19 @@ TODO: 公開インターフェースの実装後に、インストール手順�
 
 ## 開発環境
 
-Python と [uv](https://docs.astral.sh/uv/) を使用する。
+[uv](https://docs.astral.sh/uv/) を使用する。Python のバージョンは `.python-version` に従い、uv が導入する。
+
+初回のセットアップを実行すると、依存関係が同期され、コミット時と push 時の pre-commit フックが有効化される。
 
 ```bash
-uv sync
-uv run pre-commit install
-uv run pytest
-uv run pyright
+bash scripts/setup.sh
 ```
 
-リンターやフォーマッターなどの設定は `.pre-commit-config.yaml`、`.config/`、`pyproject.toml` を参照のこと。
+コミット時に整形とリント、push 時に型検査が実行される。テストは次のコマンドで実行する。
+
+```bash
+uv run pytest
+```
 
 ## ライセンス
 

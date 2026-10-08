@@ -1,0 +1,23 @@
+# target-version は指定しない。設定ファイルを --config で直接渡さない限り、
+# ruff が pyproject.toml の requires-python から推論するため、版の記述を一箇所に保てる
+line-length = 88
+
+[lint]
+select = [
+    "E",   # pycodestyle エラー
+    "W",   # pycodestyle 警告
+    "F",   # Pyflakes
+    "I",   # isort (import 順)
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # 行長は ruff-format が整える
+    # 以下はインデント整形に関する規則で、ruff-format と競合する。
+    # W191 は実際に発火し、ruff-format が直す内容でリントが先に止まる
+    "W191", # タブインデント
+    "E111", # インデント幅が 4 の倍数でない
+    "E114", # コメント行のインデント幅が 4 の倍数でない
+    "E117", # 過剰なインデント
+]

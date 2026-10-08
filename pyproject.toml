@@ -7,7 +7,7 @@ license = "MIT"
 authors = [
     { name = "Y Sakashita", email = "73250095+sakashita44@users.noreply.github.com" },
 ]
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 dependencies = [
     "duckdb>=1.5.1",
     "dvc>=3.67.0",
@@ -23,7 +23,7 @@ dev = [
     "pre-commit>=4.5.1",
     "pyright>=1.1.408",
     "pytest>=9.0.2",
-    "pytest-cov>=7.1.0",
+    "ruff>=0.16.5",
 ]
 
 [build-system]
@@ -34,7 +34,4 @@ build-backend = "uv_build"
 testpaths = ["tests"]
 
 [tool.pyright]
-pythonVersion = "3.11"
-typeCheckingMode = "standard"
-venvPath = "."
-venv = ".venv"
+typeCheckingMode = "strict"

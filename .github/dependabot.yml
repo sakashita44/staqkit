@@ -1,0 +1,35 @@
+# Dependabot 設定
+# 展開先では .github/dependabot.yml に配置する
+
+version: 2
+updates:
+    # GitHub Actions は全リポジトリ共通で有効化する
+    - package-ecosystem: 'github-actions'
+      directory: '/'
+      schedule:
+          interval: 'weekly'
+      groups:
+          # update-types を指定せず major も含めて 1 PR へ集約する
+          actions:
+              patterns: ['*']
+
+    # npm を使用するリポジトリ（ts/ 系）ではコメントアウトを解除する
+    # - package-ecosystem: 'npm'
+    #   directory: '/'
+    #   schedule:
+    #       interval: 'weekly'
+    #   groups:
+    #       npm:
+    #           patterns: ['*']
+    #   # 特定の版へ固定したい依存はここで更新を止める（展開先ごとの判断）
+    #   ignore:
+    #       - dependency-name: 'PLACEHOLDER_PACKAGE'
+    #         update-types: ['version-update:semver-major']
+
+    - package-ecosystem: 'uv'
+      directory: '/'
+      schedule:
+          interval: 'weekly'
+      groups:
+          uv:
+              patterns: ['*']

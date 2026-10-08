@@ -1,7 +1,7 @@
 # 改行コード設定
-# リポジトリ内は LF で統一（クロスプラットフォーム対応）
+# リポジトリ内は LF で統一する（クロスプラットフォーム対応）
 
-# デフォルト: テキストファイルは LF で正規化
+# デフォルト: テキストファイルは LF で正規化する
 * text=auto eol=lf
 
 # バイナリファイル（改行変換しない）
@@ -24,5 +24,7 @@
 *.bat text eol=crlf
 *.cmd text eol=crlf
 
-# PowerShell（LF でも動作するが、Windows 環境を考慮して CRLF）
+# PowerShell（LF でも動作するが，Windows 環境を考慮して CRLF にする）
 *.ps1 text eol=crlf
+*.psm1 text eol=crlf
+*.psd1 text eol=crlf

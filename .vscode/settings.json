@@ -1,0 +1,12 @@
+{
+    // Markdown設定
+    "[markdown]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 4,
+        "editor.formatOnSave": true
+    },
+    // Markdown All in One設定
+    "markdown.extension.orderedList.marker": "one",
+    "markdown.extension.list.indentationSize": "inherit",
+    "markdown.extension.toc.unorderedList.marker": "-"
+}
