@@ -1,71 +1,40 @@
-# CLAUDE.md
+# 開発ガイド
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+## プロジェクト
 
-## プロジェクト概要
+staqkit はファイルベースの実験データ解析を対象とする Python パッケージである。目指す性質と管理範囲は `docs/requirements.md` に示す。
 
-実験データ解析のための道具。規約を強制する CLI アプリと、ステージコードが依存する薄いランタイムにより、解析者の暗黙的な依存（データの意味、パラメータの経緯、処理の前提条件）を明示的に外部化し、追跡性を構造的に保証することを目指す。再現性の中核は Git と DVC へ委譲する。
-
-設計ドキュメント: `docs/` 配下
-
-- [docs/requirements.md](docs/requirements.md) — 要求定義（宣言の先行 + 信頼・理解・独立の三観点）
-- [docs/architecture.md](docs/architecture.md) — アーキテクチャ（概要・層構造・設計方針・差し替え性・要求マッピング）
-- [docs/distribution.md](docs/distribution.md) — 位置づけと配布（概念・パッケージ配布・Copier 雛形伝播）
-- [docs/directory-layout.md](docs/directory-layout.md) — ディレクトリ構成
-- [docs/components/datastore.md](docs/components/datastore.md) — DataStore（識別軸定義・クエリAPI・バリデーション）
-- [docs/components/stage.md](docs/components/stage.md) — ステージ（stage.yaml仕様・状態管理・実行モデル・来歴）
-- [docs/components/pipeline-gen.md](docs/components/pipeline-gen.md) — パイプライン生成（dvc.yaml導出・バリデーション）
-- [docs/components/cli.md](docs/components/cli.md) — CLI リファレンス（全コマンド一覧）
-- [docs/components/external-data.md](docs/components/external-data.md) — 外部データ（DAG間合成・dvc import）
-- [docs/toolstack.md](docs/toolstack.md) — ツールスタック
-
-## アーキテクチャ
-
-2層構成。依存方向は **Project → Core** の一方向のみ（Core は Project を import しない）。
-
-- **Core 層**（`staqkit.core`）: ドメイン非依存の部品群。プロジェクト固有語彙を知らない。QueryEngine, TableSchemaSet, SchemaValidator, Provenance, DAGBuilder
-- **Project 層**（`staqkit.project`）: 規約の強制。Core を組み合わせて stages/, config/ 等の規約を解釈する。DataStore（ファサード）, StageInfo, run_stage, スコープ解決ファクトリ（build_scoped_engine / open_store）, Discovery, Generator
-- **CLI**（`staqkit.cli`）: CLI エントリポイント。Project 層を呼び出す薄いレイヤー。データ参照コマンドはスコープ解決ファクトリ経由で DataStore ファサードに依存しない
-
-## 設計原則
-
-- **暗黙依存の外部化**: データの意味・経緯・前提をメタデータとして明示化
-- **構造的保証**: DDL（table_schemas）によるスキーマ宣言 → 定義に準拠しないデータは管理下に存在不可
-- **不変性と純粋関数性**: 処理ステップは `f(入力データ, パラメータ) → 新データ`
-- **データ依存DAG**: 全データ間関係は有向非巡回グラフ
+`src/staqkit/` は初期状態であり、公開CLI・解析ランタイムは未実装である。実在しない内部クラスやモジュール構成を前提にしないこと。
 
 ## 開発コマンド
 
+初回のセットアップでは、依存関係を同期し、pre-commit フックを有効化する。
+
 ```bash
-uv sync                      # 依存インストール
-uv run pre-commit install    # フック有効化
-uv run pytest                # 全テスト実行
-uv run pytest tests/test_foo.py            # 単一ファイル
-uv run pytest tests/test_foo.py::test_bar  # 単一テスト
-uv run pytest -k "keyword"                 # キーワードで絞り込み
-uv run pyright               # 型チェック
+uv sync
+uv run pre-commit install
 ```
 
-依存の追加・削除は `uv add` / `uv remove` を使用（pyproject.toml を手書き編集しない）。
+変更後の検証では、テストと型チェックを実行し、いずれもエラーなく終了することを確認する。単一のテストファイルだけを実行する場合は `uv run pytest <テストファイルのパス>` とする。
 
-## ツール設定
+```bash
+uv run pytest
+uv run pyright
+```
 
-設定ファイルは `.config/` に集約:
+Python 依存関係の追加・削除には `uv add` / `uv remove` を使用する。
 
-- `.config/ruff.toml` — Ruff（lint/format, Python 3.11, line-length 88）
-- `.config/.prettierrc` — Prettier（Markdown, YAML, JSON, TOML）
-- `.config/.markdownlint.jsonc` — markdownlint
-- `pyproject.toml [tool.pyright]` — pyright（standard モード）
+## 設定
 
-## Pull Request
+- `pyproject.toml`: パッケージ設定、依存関係、型チェック・テスト設定
+- `.config/ruff.toml`: Ruff
+- `.config/.prettierrc`: Prettier
+- `.config/.markdownlint.jsonc`: Markdownlint
+- `.pre-commit-config.yaml`: コミット前の検査
 
-PR作成時は `.github/PULL_REQUEST_TEMPLATE.md` のテンプレートに従う。
+## 保守
 
-## pre-commit フック
-
-コミット時に以下が自動実行される:
-
-- **Prettier** — Markdown, JSON, YAML, TOML のフォーマット
-- **Ruff** — Python の lint（`--fix`）+ format
-- **markdownlint-cli2** — Markdown lint
-- **pre-commit-hooks** — 末尾空白除去、ファイル末尾改行、改行コード LF 統一
+- 実装の構造はコードと型、期待する振る舞いはテストで表す。
+- 要求文書はソフトウェアの目指す性質を表す。未実装の内部クラス構造や処理手順を要求として固定しない。
+- 利用・開発ドキュメントは現行の実装と整合させ、未実装の機能を利用可能なものとして記載しない。
+- ドキュメントの内容はリポジトリ内で完結させる。
