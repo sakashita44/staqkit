@@ -214,7 +214,7 @@ staqkit の例外は単一の基底 `StaqkitError` から派生し、失敗の�
     - `WriteError`: read-only インスタンスへの write、自ステージ outs 外への write
 - `StageExecutionError`: post-run 検証で未生成ファイル（declared − actual）を検出した場合等
 
-層配置は依存方向（Project → Core）に従う。基底 `StaqkitError` と系統基底 `ConfigError` / `ValidationError` / `AccessError` は Core 層に置く。`StageExecutionError` は run_stage（Project）だけが送出するため Project 層に置く。具体型は送出箇所の層に置き、対応する系統基底を継承する。ただし複数の層から送出される具体型は、すべての送出元が参照できるよう最下層（Core）に置く。これにより `SchemaDefinitionError`・`ValidationError` 系・`ScopeError`・`ReferenceIntegrityError` は Core、`StageDefinitionError`・`WriteError` は Project となる。`ReferenceIntegrityError` は DAG 循環・FK 参照先不在を Core（DAGBuilder / TableSchemaSet）が、source_stage 不在・active が planned を参照・外部取り込みポインタの構造的不整合を Project（Discovery / Generator）が送出する両層またがりの型のため、双方から参照できる Core 側に置く。Project の具体型が Core の系統基底を継承するのは依存方向に沿う。系統基底（性質の分類）と送出層（実装上の所在）は独立であり、たとえば `ConfigError` は Core に置くが具体型 `StageDefinitionError` は Project が送出する。利用者が捕捉する公開面は `staqkit.errors` に re-export する。
+層配置は依存方向（Project → Core）に従う。基底 `StaqkitError` と系統基底 `ConfigError` / `ValidationError` / `AccessError` は Core 層に置く。`StageExecutionError` は run_stage（Project）だけが送出するため Project 層に置く。具体型は送出箇所の層に置き、対応する系統基底を継承する。ただし複数の層から送出される具体型は、すべての送出元が参照できるよう最下層（Core）に置く。これにより `SchemaDefinitionError`・`ValidationError` 系・`ScopeError`・`ReferenceIntegrityError` は Core、`StageDefinitionError`・`WriteError` は Project となる。`ReferenceIntegrityError` は DAG 循環・FK 参照先不在を Core（参照整合性検査 / TableSchemaSet）が、入力 artifact の stage/out key 不在・active が planned を参照・外部取り込みポインタの構造的不整合を Project（Discovery / Generator）が送出する両層またがりの型のため、双方から参照できる Core 側に置く。Project の具体型が Core の系統基底を継承するのは依存方向に沿う。系統基底（性質の分類）と送出層（実装上の所在）は独立であり、たとえば `ConfigError` は Core に置くが具体型 `StageDefinitionError` は Project が送出する。利用者が捕捉する公開面は `staqkit.errors` に re-export する。
 
 #### 人間向けエラー報告
 
@@ -284,7 +284,7 @@ stages/
 
 | 情報                           | SSoT                                      | 格納先                                                                      |
 | ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------- |
-| 実行 DAG 構造                 | dvc.yaml（stages/\*/stage.yaml から生成） | deps / outs                                                                 |
+| 実行 DAG 構造                 | stage.yaml（SSoT）から生成する dvc.yaml | deps / outs                                                                 |
 | パラメータ（値）               | 外部 params ファイル（慣習上 `params/`）  | DVC ネイティブの params ファイル。複数ステージで共有可能                    |
 | パラメータ参照（束縛）         | stages/xxx/stage.yaml                     | params セクション（ローカル名 → `{ file, key }`）                           |
 | inputs（依存 artifact）       | stages/xxx/stage.yaml                     | inputs.tables / inputs.files（stage と out の参照）                                      |
@@ -292,7 +292,7 @@ stages/
 | description（詳細）            | stages/xxx/README.md                      | アルゴリズム説明                                                            |
 | planned 状態                   | stages/xxx/stage.yaml                     | status フィールド + data/ の有無                                            |
 | 出力宣言（outs）               | stages/xxx/stage.yaml                     | outs セクション                                                             |
-| 来歴（params・ハッシュ・系譜） | dvc.lock + git 履歴                       | Git管理の dvc.lock（stage.yaml から生成）を源泉に provenance/history が導出 |
+| 来歴（params・ハッシュ・系譜） | dvc.lock + git 履歴                       | DVC が生成した lock と git 履歴から provenance/history を導出 |
 | 追加のパス依存（path_deps）         | stages/xxx/stage.yaml                     | path_deps セクション                                                       |
 | 処理コード                     | stages/xxx/run.py                         | エントリポイント                                                            |
 | テーブルカタログ               | `staqkit catalog` の stdout 出力          | 対象テーブルは table_schemas の `catalog: true` で指定                      |
