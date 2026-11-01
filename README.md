@@ -1,7 +1,7 @@
 # staqkit
 
 > [!NOTE]
-> WIP: 公開CLI・解析ランタイムは未実装。
+> WIP
 
 staqkit は、ファイルベースの実験データ解析に、意味的なデータアクセス、データ契約、生成関係の追跡を提供する Python ツールである。
 
@@ -20,17 +20,13 @@ TODO: 公開インターフェースの実装後に、インストール手順�
 
 ## 開発環境
 
-[uv](https://docs.astral.sh/uv/) を使用する。Python のバージョンは `.python-version` に従い、uv が導入する。
-
-初回のセットアップを実行すると、依存関係が同期され、コミット時と push 時の pre-commit フックが有効化される。
+必要なツール: [uv](https://docs.astral.sh/uv/)
 
 ```bash
+# 依存関係の同期と pre-commit フックの導入
 bash scripts/setup.sh
-```
 
-コミット時に整形とリント、push 時に型検査が実行される。テストは次のコマンドで実行する。
-
-```bash
+# テストの実行
 uv run pytest
 ```
 
