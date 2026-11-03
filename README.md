@@ -80,6 +80,21 @@ rows:
 
 stage の宣言では、`inputs` と `params` が必須である。使わない場合は空の対応（`{}`）を記述する。`outs` の `path` は `data/stages/<stage 名>/` からの相対パスであり、`table` を指定した出力は Parquet ファイルとして staqkit が書き出す。
 
+生データのように stage の出力でないファイルは、`path_deps` にプロジェクトのルートからの相対パスで宣言する。宣言したファイルとディレクトリは DVC の依存になり、変更すると stage が再実行される。`table` を指定しない出力には、図など任意のファイルを書き出せる。
+
+```yaml
+# stages/extract_steps/stage.yaml
+inputs: {}
+params: {}
+path_deps:
+    - data/raw/trials # stage が直接読む生データのディレクトリ
+outs:
+    og: { path: og.parquet, table: step_observation }
+    qc_plot: { path: qc.png } # table を指定しない出力
+```
+
+データを格納するテーブルの外部キーが別のデータのテーブルを参照する場合は、参照先のテーブルを出力する artifact を `inputs.tables` に宣言するか、同じ stage の `outs` に含める。別の stage の、`table` を指定しない出力は、`inputs.files` に名前を付けて宣言する。
+
 ```yaml
 # stages/summarize_steps/stage.yaml
 inputs:
@@ -87,6 +102,8 @@ inputs:
         - { stage: extract_steps, out: og } # extract_steps の出力 og だけを読む
     keys:
         - config/keys/metrics_spatial.yaml # 省略時は、テーブルが参照するすべての宣言ファイル
+    files:
+        qc: { stage: extract_steps, out: qc_plot }
 params:
     min_value: { file: params.yaml, key: summarize.min_value }
 outs:
@@ -104,6 +121,7 @@ from staqkit import DataStore, StageInfo, run_stage
 
 def run(stage: StageInfo, store: DataStore) -> None:
     observations = store.query("step_observation", {"metric": ["step_length"]})
+    observations = observations.filter(pl.col("value") >= stage.params["min_value"])
     summary = observations.group_by("trial", "metric").agg(
         pl.len().cast(pl.Int64).alias("n"), pl.col("value").mean().alias("mean")
     )
@@ -115,6 +133,15 @@ if __name__ == "__main__":
 ```
 
 `write_table` に渡す DataFrame の列の型は、DDL の型と一致させること（例: `INTEGER` の列には `pl.Int32`）。
+
+`run` の `stage` からは、stage の実行に必要な値とパスを得る。
+
+- `stage.params["<名前>"]`: `params` に束縛したパラメータの値
+- `stage.root`: プロジェクトのルートの絶対パス。`path_deps` に宣言したファイルは `stage.root / "data/raw/trials"` のように参照する
+- `stage.input_path("<名前>")`: `inputs.files` に宣言したファイルのパス
+- `stage.output_path("<キー>")`: `table` を指定しない出力のパス。親ディレクトリは作成済みである
+
+`query` は、`inputs.keys` で選んだ宣言ファイルにない値のキーを参照する行を返さない。参照先のキーの宣言ファイルを選ばなかった場合、その行はすべて返らない。
 
 ### 実行
 
@@ -137,6 +164,10 @@ if __name__ == "__main__":
     ```
 
     成功すると終了コード 0 を返す。失敗した場合は、表示された原因（`dvc.yaml` の再生成、`dvc repro` の再実行、主キーの重複など）を解消して再実行すること。
+
+1. 宣言、`run.py`、`dvc.yaml`、`dvc.lock` と、DVC が出力のディレクトリに作成する `.gitignore` を Git にコミットする。`data/stages/` 配下の出力は DVC が管理するため、Git に追加しない。
+
+`outs` や `path_deps` の変更は、`staqkit generate` を実行するまで `dvc.yaml` に反映されず、`dvc repro` だけでは検知されない。宣言を編集した後は、`staqkit check` で再生成の漏れを確認すること。
 
 `LongPathsEnabled` が無効な Windows では、プロジェクトのルートの絶対パスがおよそ 80 文字を超えると、`dvc repro` が run cache の保存に失敗する。ルートを短いパスに配置するか、`LongPathsEnabled` を有効にすること。
 
