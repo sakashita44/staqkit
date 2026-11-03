@@ -133,7 +133,7 @@ class DataStore:
         if schema.role is TableRole.DATA:
             conditions += self._visibility_conditions(schema)
         where = f" WHERE {' AND '.join(conditions)}" if conditions else ""
-        return self._con.execute(f"SELECT * FROM {view} AS s{where}", params).pl()
+        return self._con.sql(f"SELECT * FROM {view} AS s{where}", params=params).pl()
 
     def _visible_key_fks(self, schema: TableSchema):
         return [
