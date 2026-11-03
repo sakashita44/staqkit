@@ -96,9 +96,10 @@ def _check_value_type(value: YamlValue, column: Column, where: str) -> None:
             f"{where}: キーの宣言ファイルは {data_type} 型の列に対応しない"
         )
     if not ok:
+        hint = "。文字列は引用符で囲むこと" if data_type == "VARCHAR" else ""
         raise ConfigError(
             f"{where}: 値 {value!r}（{type(value).__name__}）は {data_type} 型の列に"
-            "記述できない。文字列は引用符で囲むこと"
+            f"記述できない{hint}"
         )
 
 
