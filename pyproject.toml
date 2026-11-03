@@ -13,6 +13,7 @@ dependencies = [
     "dvc>=3.67.0",
     "networkx>=3.6.1",
     "polars>=1.39.3",
+    "pyarrow>=26.0.1",
     "pydantic>=2.12.5",
     "ruamel-yaml>=0.19.1",
     "typer>=0.24.1",
