@@ -19,6 +19,9 @@ dependencies = [
     "typer>=0.24.1",
 ]
 
+[project.scripts]
+staqkit = "staqkit.cli:app"
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.5.1",
