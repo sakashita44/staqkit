@@ -1,129 +1,198 @@
 # staqkit
 
 > [!NOTE]
-> WIP
+> 開発中のため、公開 API、コマンド、宣言ファイルの形式は予告なく変更される場合がある。
 
 staqkit は、ファイルベースの実験データ解析に、意味的なデータアクセス、データ契約、生成関係の追跡を提供する Python ツールである。
 
 ## コンセプト
 
 - 属性ベースのデータアクセス: 物理ファイルパスに依存せず、意味的な属性でデータを参照する。
-- データ依存関係の明示化: 入力データ・処理・パラメータと成果物の関係を宣言し、変更の影響範囲を把握できるようにする。
+- データ依存関係の明示化: 入力データ、処理、パラメータと成果物の関係を宣言し、変更の影響範囲を把握できるようにする。
 - スキーマに基づく契約: データの構造と制約を明示し、管理対象のデータを検証する。
-- 生成関係の追跡: 宣言された生成条件と成果物の整合性を、追跡可能な範囲で確認できるようにする。
+- 生成関係の追跡: 宣言した生成条件と成果物の整合性を、追跡可能な範囲で確認できるようにする。
 
-目的と要求の詳細: [要求定義](docs/requirements.md)
+## 動作要件
 
-## インストールと使い方
+- Python 3.13 以上
+- Git
+- [uv](https://docs.astral.sh/uv/)（クイックスタートのコマンド実行に用いる）
 
-### インストール
+DVC、DuckDB、polars は staqkit の依存関係としてインストールされる。
 
-解析プロジェクトの仮想環境に staqkit を導入する。DVC は staqkit の依存として同時に導入される。
+## インストール
+
+staqkit は PyPI に公開されていないため、GitHub のリポジトリを指定してインストールする。
 
 ```bash
 uv add git+https://github.com/sakashita44/staqkit
 ```
 
-解析プロジェクトは Git と DVC で初期化しておくこと（`git init`、`uv run dvc init`）。staqkit は `.dvc/` を含むディレクトリをプロジェクトのルートとして扱う。
+## クイックスタート
 
-### プロジェクトの構成
+試行ごとの計測値を CSV から取り込み、しきい値以上の試行について実験条件ごとの平均値を求めるパイプラインを作成する。パイプラインは 2 つの stage で構成する。
 
-staqkit は、プロジェクトのルートから次の位置にある宣言を読み込む。
+- `ingest`: CSV を読み取り、計測値のテーブル `measurements` を出力する。
+- `summarize`: `measurements` を読み取り、平均値のテーブル `summary` を出力する。
 
-| パス                                     | 内容                                     |
-| ---------------------------------------- | ---------------------------------------- |
-| `config/table_schemas/<テーブル名>.yaml` | テーブルの定義（DDL）                    |
-| `config/keys/**/*.yaml`                  | キーを定義するテーブルの行               |
-| `stages/<stage 名>/stage.yaml`           | stage の入力、パラメータ、出力の宣言     |
-| `stages/<stage 名>/run.py`               | stage の処理                             |
-| `data/stages/<stage 名>/`                | stage の出力の格納先（staqkit が決める） |
-| `dvc.yaml`                               | 宣言から生成するパイプライン定義         |
+作成するファイルを示す。パスにはプロジェクトのルートからの相対パスを用いる。
 
-stage 名は `stages/` からのディレクトリの相対パスであり、各区切りには ASCII の英数字、`_`、`-` を用いる。
+| パス                                                     | 内容                                 |
+| -------------------------------------------------------- | ------------------------------------ |
+| `data/raw/measurements.csv`                              | 生データ                             |
+| `params.yaml`                                            | パラメータ                           |
+| `config/table_schemas/<テーブル名>.yaml`                 | テーブル定義（3 テーブル）           |
+| `config/keys/conditions.yaml`                            | 実験条件の一覧（キーの宣言ファイル） |
+| `stages/ingest/stage.yaml`、`stages/ingest/run.py`       | `ingest` の宣言と処理                |
+| `stages/summarize/stage.yaml`、`stages/summarize/run.py` | `summarize` の宣言と処理             |
 
-### 宣言の例
+### プロジェクトの準備
 
-テーブルの定義では、`ddl` に DuckDB の `CREATE TABLE` を 1 文記述する。すべてのテーブルに主キーが必要である。DDL は literal ブロック（`|`）で記述すること。folded ブロック（`>`）では、改行位置の変更が DDL の変更として検知されない場合がある。
+解析プロジェクトを Git と DVC で初期化し、staqkit を追加する。staqkit は、`.dvc/` を含むディレクトリをプロジェクトのルートとして扱う。
 
-```yaml
-# config/table_schemas/step_observation.yaml
-description: 1 歩ごとの観測値
-ddl: |
-    CREATE TABLE step_observation (
-      trial        TEXT NOT NULL,
-      step_ordinal INTEGER NOT NULL,
-      metric       TEXT NOT NULL REFERENCES metric (metric),
-      value        DOUBLE NOT NULL,
-      PRIMARY KEY (trial, step_ordinal, metric)
-    );
+```bash
+git init
+uv init --python 3.13
+uv add git+https://github.com/sakashita44/staqkit
+uv run dvc init
 ```
 
-キーの語彙と属性を宣言で提供するテーブルには `role: keys` を指定し、行を `config/keys/` 配下の宣言ファイルに記述する。行の値の型は DDL の列の型と一致させること。文字列の列に `01` のような値を記述する場合は引用符で囲む。
+生データ `data/raw/measurements.csv` とパラメータ `params.yaml` を作成する。
+
+```csv
+subject_id,condition,trial,value
+S01,control,1,1.2
+S01,treatment,2,0.4
+S02,control,1,1.5
+S02,treatment,2,2.1
+```
 
 ```yaml
-# config/table_schemas/metric.yaml
+# params.yaml
+summarize:
+    min_value: 0.5
+```
+
+### テーブルの定義
+
+stage が読み書きするテーブルの列、型、制約を、`config/table_schemas/<テーブル名>.yaml` に DuckDB の `CREATE TABLE` 文で定義する。staqkit は、stage の出力をこの定義に照らして検査する。すべてのテーブルに主キーを定義すること。
+
+実験条件のように、解析者が意図を持って定める分類の語彙は、キーとして YAML で宣言する。キーを定義するテーブルには `role: keys` を指定し、行をキーの宣言ファイルに記述する。被験者や試行のように実験の進行に伴って生じる識別子は、キーとして宣言せず、生データから取り込む。
+
+```yaml
+# config/table_schemas/conditions.yaml
 role: keys
+description: 実験条件の一覧
 ddl: |
-    CREATE TABLE metric (
-      metric TEXT PRIMARY KEY,
-      unit   TEXT NOT NULL
-    );
+    CREATE TABLE conditions (
+      condition   VARCHAR PRIMARY KEY,
+      description VARCHAR NOT NULL
+    )
 ```
 
 ```yaml
-# config/keys/metrics_spatial.yaml
-table: metric
+# config/keys/conditions.yaml
+table: conditions
 rows:
-    - { metric: step_length, unit: mm }
-    - { metric: step_width, unit: mm }
+    - { condition: control, description: 介入なし }
+    - { condition: treatment, description: 介入あり }
 ```
 
-stage の宣言では、`inputs` と `params` が必須である。使わない場合は空の対応（`{}`）を記述する。`outs` の `path` は `data/stages/<stage 名>/` からの相対パスであり、`table` を指定した出力は Parquet ファイルとして staqkit が書き出す。
-
-生データのように stage の出力でないファイルは、`path_deps` にプロジェクトのルートからの相対パスで宣言する。宣言したファイルとディレクトリは DVC の依存になり、変更すると stage が再実行される。`run.py` が import するプロジェクト内のモジュールも依存として自動では追跡されないため、同様に `path_deps` に宣言する。`table` を指定しない出力には、図など任意のファイルを書き出せる。
+stage が出力するデータのテーブルを定義する。`condition` を外部キーで `conditions` に結び付けると、宣言した実験条件以外の値は書き出せなくなる。
 
 ```yaml
-# stages/extract_steps/stage.yaml
+# config/table_schemas/measurements.yaml
+description: 試行ごとの計測値
+ddl: |
+    CREATE TABLE measurements (
+      subject_id VARCHAR NOT NULL,
+      condition  VARCHAR NOT NULL REFERENCES conditions (condition),
+      trial      BIGINT NOT NULL,
+      value      DOUBLE NOT NULL,
+      PRIMARY KEY (subject_id, trial)
+    )
+```
+
+```yaml
+# config/table_schemas/summary.yaml
+description: 実験条件ごとの平均値
+ddl: |
+    CREATE TABLE summary (
+      condition  VARCHAR PRIMARY KEY REFERENCES conditions (condition),
+      mean_value DOUBLE NOT NULL
+    )
+```
+
+### stage の作成
+
+stage ごとに、`stages/<stage 名>/stage.yaml` に入力、パラメータ、出力を宣言し、`stages/<stage 名>/run.py` に処理を記述する。staqkit は `stage.yaml` から DVC のパイプライン定義を生成する。
+
+`ingest` は、stage の出力ではない生データを `path_deps` に宣言する。宣言したファイルが変更されると、stage が再実行される。
+
+```yaml
+# stages/ingest/stage.yaml
 inputs: {}
 params: {}
 path_deps:
-    - data/raw/trials # stage が直接読む生データのディレクトリ
+    - data/raw/measurements.csv
 outs:
-    og: { path: og.parquet, table: step_observation }
-    qc_plot: { path: qc.png } # table を指定しない出力
+    measurements: { path: measurements.parquet, table: measurements }
 ```
 
-データを格納するテーブルの外部キーが別のデータのテーブルを参照する場合は、参照先のテーブルを出力する artifact を `inputs.tables` に宣言するか、同じ stage の `outs` に含める。別の stage の、`table` を指定しない出力は、`inputs.files` に名前を付けて宣言する。
-
-```yaml
-# stages/summarize_steps/stage.yaml
-inputs:
-    tables:
-        - { stage: extract_steps, out: og } # extract_steps の出力 og だけを読む
-    keys:
-        - config/keys/metrics_spatial.yaml # 省略時は、テーブルが参照するすべての宣言ファイル
-    files:
-        qc: { stage: extract_steps, out: qc_plot }
-params:
-    min_value: { file: params.yaml, key: summarize.min_value }
-outs:
-    summary: { path: summary.parquet, table: step_summary }
-```
-
-`run.py` は `run` 関数を定義し、`run_stage` に渡す。読み取りは論理テーブル名で、書き出しは `outs` のキーで指定する。
+`run.py` では、`run` 関数を定義して `run_stage` に渡す。テーブルへの出力は、`outs` のキーを指定して `store.write_table` で書き出す。DataFrame の列の型は、DDL の型と一致させること（`VARCHAR`、`BIGINT`、`DOUBLE` は polars の `String`、`Int64`、`Float64`）。
 
 ```python
-# stages/summarize_steps/run.py
+# stages/ingest/run.py
 import polars as pl
 
 from staqkit import DataStore, StageInfo, run_stage
 
 
 def run(stage: StageInfo, store: DataStore) -> None:
-    observations = store.query("step_observation", {"metric": ["step_length"]})
-    observations = observations.filter(pl.col("value") >= stage.params["min_value"])
-    summary = observations.group_by("trial", "metric").agg(
-        pl.len().cast(pl.Int64).alias("n"), pl.col("value").mean().alias("mean")
+    df = pl.read_csv(
+        stage.root / "data/raw/measurements.csv",
+        schema={
+            "subject_id": pl.String,
+            "condition": pl.String,
+            "trial": pl.Int64,
+            "value": pl.Float64,
+        },
+    )
+    store.write_table("measurements", df)
+
+
+if __name__ == "__main__":
+    run_stage(run)
+```
+
+`summarize` は、`ingest` の出力を `inputs.tables` に、しきい値を `params` に宣言する。
+
+```yaml
+# stages/summarize/stage.yaml
+inputs:
+    tables:
+        - { stage: ingest, out: measurements }
+params:
+    min_value: { file: params.yaml, key: summarize.min_value }
+outs:
+    summary: { path: summary.parquet, table: summary }
+```
+
+入力のテーブルは、ファイルのパスではなくテーブル名を指定して `store.query` で読み取る。パラメータの値は `stage.params` から取得する。
+
+```python
+# stages/summarize/run.py
+import polars as pl
+
+from staqkit import DataStore, StageInfo, run_stage
+
+
+def run(stage: StageInfo, store: DataStore) -> None:
+    measurements = store.query("measurements")
+    summary = (
+        measurements.filter(pl.col("value") >= stage.params["min_value"])
+        .group_by("condition")
+        .agg(pl.col("value").mean().alias("mean_value"))
     )
     store.write_table("summary", summary)
 
@@ -132,57 +201,38 @@ if __name__ == "__main__":
     run_stage(run)
 ```
 
-`write_table` に渡す DataFrame の列の型は、DDL の型と一致させること（例: `INTEGER` の列には `pl.Int32`）。
+### パイプラインの実行
 
-`run` の `stage` からは、stage の実行に必要な値とパスを得る。
-
-- `stage.params["<名前>"]`: `params` に束縛したパラメータの値
-- `stage.root`: プロジェクトのルートの絶対パス。`path_deps` に宣言したファイルは `stage.root / "data/raw/trials"` のように参照する
-- `stage.input_path("<名前>")`: `inputs.files` に宣言したファイルのパス
-- `stage.output_path("<キー>")`: `table` を指定しない出力のパス。親ディレクトリは作成済みである
-
-`query` は、`inputs.keys` で選んだ宣言ファイルにない値のキーを参照する行を返さない。参照先のキーの宣言ファイルを選ばなかった場合、その行はすべて返らない。
-
-### 実行
-
-1. 宣言を検査し、`dvc.yaml` を生成する。宣言を編集するたびに再実行すること。`dvc.yaml` は全体を生成し直すため、直接編集しないこと。直接編集した内容は次の生成で失われ、`staqkit check` も失敗する。
+1. 宣言から `dvc.yaml` を生成する。宣言を編集するたびに実行すること。`dvc.yaml` は生成のたびに全体が上書きされるため、直接編集しないこと。
 
     ```bash
     uv run staqkit generate
     ```
 
-1. パイプラインを実行する。stage の `cmd` は PATH 上の `python` で実行されるため、staqkit を導入した仮想環境で実行すること。
+1. パイプラインを実行する。`ingest`、`summarize` の順に実行され、`data/stages/ingest/measurements.parquet`、`data/stages/summarize/summary.parquet`、`dvc.lock` が作成される。
 
     ```bash
     uv run dvc repro
     ```
 
-1. コミットの前に、プロジェクト全体の整合性を検査する。
+1. プロジェクト全体の整合性を検査する。すべての検査項目を通過すると、`検査に合格した` と表示される。失敗した場合は、表示された原因を解消して再実行すること。
 
     ```bash
     uv run staqkit check
     ```
 
-    `staqkit check` は次を検査し、すべて満たすと終了コード 0 を返す。失敗した場合は、表示された原因を解消して再実行すること。
+1. 作成したファイル、`dvc.yaml`、`dvc.lock`、および DVC が出力ディレクトリに作成する `.gitignore` を Git にコミットする。`data/stages/` 配下の出力は DVC が管理するため、Git に追加しないこと。
 
-    - `dvc.yaml` が宣言から生成した内容と一致する
-    - `dvc status` で、すべての stage が最新である
-    - `dvc.lock` に記録された依存が `dvc.yaml` の依存と一致する
-    - 同じテーブルを出力する artifact の間で、主キーが重複しない
+## 文書
 
-    出力の型、外部キー、`CHECK` は stage の実行時に検査し、`staqkit check` では再検査しない。DVC が run cache から出力を復元した stage では、これらの検査は実行されない。
+- [ガイド](docs/guide.md): staqkit を用いた解析の構成と進め方
+- [リファレンス](docs/reference.md): 宣言ファイルの全項目、Python API、コマンドの仕様
+- [トラブルシューティング](docs/troubleshooting.md): 起きやすい問題と対処
+- [要求定義](docs/requirements.md): staqkit が目指す性質
 
-1. 宣言、`run.py`、`dvc.yaml`、`dvc.lock` と、DVC が出力のディレクトリに作成する `.gitignore` を Git にコミットする。`data/stages/` 配下の出力は DVC が管理するため、Git に追加しない。
+## 開発
 
-`outs` や `path_deps` の変更は、`staqkit generate` を実行するまで `dvc.yaml` に反映されず、`dvc repro` だけでは検知されない。宣言を編集した後は、`staqkit check` で再生成の漏れを確認すること。
-
-`LongPathsEnabled` が無効な Windows では、プロジェクトのルートの絶対パスがおよそ 80 文字を超えると、`dvc repro` が run cache の保存に失敗する。ルートを短いパスに配置するか、`LongPathsEnabled` を有効にすること。
-
-pyarrow や DuckDB の版を上げると、Parquet に記録される版情報が変わる。版を上げた後に stage を再実行すると、データが同一でも下流の stage まで再実行される。
-
-## 開発環境
-
-必要なツール: [uv](https://docs.astral.sh/uv/)
+開発環境の構築とテストの実行には、[uv](https://docs.astral.sh/uv/) を用いる。
 
 ```bash
 # 依存関係の同期と pre-commit フックの導入
