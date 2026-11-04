@@ -145,7 +145,7 @@ if __name__ == "__main__":
 
 ### 実行
 
-1. 宣言を検査し、`dvc.yaml` を生成する。宣言を編集するたびに再実行すること。
+1. 宣言を検査し、`dvc.yaml` を生成する。宣言を編集するたびに再実行すること。`dvc.yaml` は全体を生成し直すため、直接編集しないこと。直接編集した内容は次の生成で失われ、`staqkit check` も失敗する。
 
     ```bash
     uv run staqkit generate
@@ -163,7 +163,14 @@ if __name__ == "__main__":
     uv run staqkit check
     ```
 
-    成功すると終了コード 0 を返す。失敗した場合は、表示された原因（`dvc.yaml` の再生成、`dvc repro` の再実行、主キーの重複など）を解消して再実行すること。
+    `staqkit check` は次を検査し、すべて満たすと終了コード 0 を返す。失敗した場合は、表示された原因を解消して再実行すること。
+
+    - `dvc.yaml` が宣言から生成した内容と一致する
+    - `dvc status` で、すべての stage が最新である
+    - `dvc.lock` に記録された依存が `dvc.yaml` の依存と一致する
+    - 同じテーブルを出力する artifact の間で、主キーが重複しない
+
+    出力の型、外部キー、`CHECK` は stage の実行時に検査し、`staqkit check` では再検査しない。DVC が run cache から出力を復元した stage では、これらの検査は実行されない。
 
 1. 宣言、`run.py`、`dvc.yaml`、`dvc.lock` と、DVC が出力のディレクトリに作成する `.gitignore` を Git にコミットする。`data/stages/` 配下の出力は DVC が管理するため、Git に追加しない。
 
